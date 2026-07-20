@@ -80,6 +80,27 @@ they never touch the HTTP client.
 This is load-bearing. A new mutating tool that calls `client.post` directly is a bug,
 not a shortcut.
 
+### `shared/kill-switch.ts` — the emergency stop
+
+Durable state in the job database, read from disk on **every** order and never cached,
+checked inside `Executor` rather than by any tool.
+
+That placement is the whole design, and it was got wrong once. The switch was first
+enforced by the risk tool module shadowing `Executor.submitOrder` at registration time.
+That covers every caller inside an MCP session and misses the one that matters most:
+`robinhood-mcp-daemon` builds its own `Executor` and loads no tool modules, so the guard
+was never installed there. An operator could engage the switch, see it report `engaged`,
+and have the daemon keep slicing a TWAP unattended.
+
+A safety control has to live below everything it protects. Because it is an `Executor`
+dependency, a halt binds order tools, strategies, the daemon, and anything added later,
+without each having to remember to ask. Because it is read from disk rather than memory,
+engaging it from an MCP session stops a daemon that has been running since before the
+switch was thrown.
+
+It fails closed: a row that cannot be parsed reads as engaged. Resuming trading because
+a row got corrupted is exactly the failure a kill switch exists to prevent.
+
 ### `shared/execution-mode.ts` — how much confirmation sits in front of an order
 
 `guarded` (default) returns a priced preview on the first call and executes on a second
@@ -103,9 +124,33 @@ A large tool surface hurts an agent rather than helping it: every tool spends co
 and adds a wrong option to choose from. So the toolkit ships >100 capabilities as
 **modules the operator turns on**, and only the enabled ones are registered.
 
-`ROBINHOOD_MCP_MODULES=core,algo,risk` selects them. Unset loads a deliberately small
+`ROBINHOOD_MCP_MODULES=market,orders,algo` selects them. Unset loads a deliberately small
 default set. `all` loads everything, which is useful for a builder exploring the surface
 and a poor choice for a production agent.
+
+| Module | Default | Places orders | What it covers |
+|---|---|---|---|
+| `market` | on | no | Quotes, holdings, account, trading pairs, order history |
+| `orders` | on | **yes** | The four primitives, each as its own tool, plus `place_order` |
+| `algo` | on | **yes** | The synthetic order types, as durable jobs |
+| `portfolio` | on | no | Cost basis, realized P&L, tax lots, allocation, slippage, volatility |
+| `risk` | on | **yes** | Exposure, drawdown, pre-trade checks, the kill switch |
+| `journal` | off | no | Fills, round trips, win rate, daily summaries, CSV export |
+| `ops` | off | no | Health, clock skew, key check, rate limit, supervisor status |
+| `dev` | off | no | Keypair generation, signature explanation, client code generation |
+
+Two rules the registry enforces at startup rather than silently:
+
+- An unknown module name is an error. A typo that quietly drops tools is worse than a
+  failed start.
+- A mutating module requested on the read-only server is an error, not an omission.
+  Dropping it would leave an operator believing they had enabled execution when they had
+  not.
+
+`list_modules` reports what is loaded **and** what exists but is switched off, with the
+env var that would enable it. Without that, a disabled module is indistinguishable from a
+capability the toolkit lacks, and the agent tells the user something is impossible when
+it is one variable away.
 
 ## Crash safety
 
