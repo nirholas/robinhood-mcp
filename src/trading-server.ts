@@ -1,27 +1,25 @@
 /**
  * Trading MCP server for the Robinhood Crypto Trading API.
  *
- * A superset of the read-only server: every data tool plus `place_order` and
- * `cancel_order`. Refuses to start unless ROBINHOOD_CRYPTO_ENABLE_TRADING=1,
- * so it can never be launched by accident.
+ * A superset of the read-only server: every read tool plus order placement and
+ * the durable execution engine. Refuses to start unless
+ * ROBINHOOD_CRYPTO_ENABLE_TRADING=1, so it can never be launched by accident.
+ *
+ * Which tools appear is chosen by ROBINHOOD_MCP_MODULES; see tools/registry.ts.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { RobinhoodCryptoClient } from './shared/client.js';
-import { loadCredentials } from './shared/config.js';
+import { jobDatabasePath, loadCredentials } from './shared/config.js';
 import { assertTradingEnabled, loadExecutionPolicy, SpendLedger } from './shared/execution-mode.js';
 import { Executor } from './shared/executor.js';
-import { registerDataTools } from './register-data.js';
-import { registerTradingTools } from './register-trading.js';
-import { registerAlgoTools } from './tools/algo.js';
-import { registerOrderTools } from './tools/orders.js';
 import { JobStore } from './engine/store.js';
 import { Supervisor } from './engine/supervisor.js';
 import { ALL_STRATEGIES } from './engine/strategies/index.js';
-import { jobDatabasePath } from './shared/config.js';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { applyModules } from './tools/registry.js';
 import { VERSION } from './version.js';
 
 export function createTradingServer(): McpServer {
@@ -33,14 +31,7 @@ export function createTradingServer(): McpServer {
   const client = new RobinhoodCryptoClient(credentials);
   const executor = new Executor(client, credentials, policy, new SpendLedger(policy));
 
-  const server = new McpServer({
-    name: 'robinhood-mcp-trading',
-    version: VERSION,
-  });
-
-  registerDataTools(server, client, credentials);
-  registerTradingTools(server, executor);
-  registerOrderTools(server, executor);
+  const server = new McpServer({ name: 'robinhood-mcp-trading', version: VERSION });
 
   // Durable execution jobs. The same database backs the standalone daemon, so
   // a job started here keeps running under `robinhood-mcp-daemon` after this
@@ -50,11 +41,21 @@ export function createTradingServer(): McpServer {
   const store = new JobStore(dbPath);
   const supervisor = new Supervisor(store, executor, ALL_STRATEGIES);
 
-  registerAlgoTools(server, store, supervisor, () => supervisorRunning);
+  let supervisorRunning = false;
+
+  const loaded = applyModules(
+    {
+      server,
+      client,
+      credentials,
+      executor,
+      engine: { store, supervisor, daemonRunning: () => supervisorRunning },
+    },
+    { allowMutating: true, requested: process.env.ROBINHOOD_MCP_MODULES },
+  );
 
   // Advance jobs while this server is connected. The daemon is what keeps them
   // moving when it is not.
-  let supervisorRunning = false;
   void supervisor.start().then(
     () => {
       supervisorRunning = true;
@@ -65,6 +66,9 @@ export function createTradingServer(): McpServer {
       );
     },
   );
+
+  console.error(`[robinhood-mcp-trading] modules loaded: ${loaded.map((m) => m.name).join(', ')}`);
+
   return server;
 }
 
@@ -82,4 +86,3 @@ export async function main(): Promise<void> {
     process.exit(1);
   }
 }
-

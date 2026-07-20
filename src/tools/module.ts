@@ -13,12 +13,50 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RobinhoodCryptoClient } from '../shared/client.js';
 import type { Credentials } from '../shared/config.js';
 import type { Executor } from '../shared/executor.js';
+import type { JobStore } from '../engine/store.js';
+import type { Supervisor } from '../engine/supervisor.js';
 
+/** Durable-job machinery. Only the trading server builds one. */
+export interface EngineContext {
+  store: JobStore;
+  supervisor: Supervisor;
+  daemonRunning: () => boolean;
+}
+
+/**
+ * What a module gets to register with.
+ *
+ * `executor` and `engine` are absent on the read-only server, which builds
+ * neither. A module that needs them declares `mutating: true`, and the
+ * read-only server refuses to load such a module at all, so the optionality
+ * never has to be re-checked inside a handler.
+ */
 export interface ModuleContext {
   server: McpServer;
   client: RobinhoodCryptoClient;
   credentials: Credentials;
+  executor?: Executor;
+  engine?: EngineContext;
+}
+
+/**
+ * Narrow a context for a mutating module.
+ *
+ * @throws {Error} If the server did not supply execution machinery. This is a
+ *   wiring bug, not a user error: `selectModules` should already have excluded
+ *   the module.
+ */
+export function requireExecution(context: ModuleContext): {
   executor: Executor;
+  engine: EngineContext;
+} {
+  if (!context.executor || !context.engine) {
+    throw new Error(
+      'A mutating module was registered on a server without execution machinery. ' +
+        'Mutating modules belong on robinhood-mcp-trading only.',
+    );
+  }
+  return { executor: context.executor, engine: context.engine };
 }
 
 export interface ToolModule {
@@ -42,11 +80,15 @@ export interface ToolModule {
 export function selectModules(
   available: ToolModule[],
   raw: string | undefined,
+  options: { allowMutating?: boolean } = {},
 ): ToolModule[] {
+  const allowMutating = options.allowMutating ?? true;
   const requested = raw?.trim();
 
-  if (!requested) return available.filter((m) => m.enabledByDefault);
-  if (requested.toLowerCase() === 'all') return available;
+  const permitted = allowMutating ? available : available.filter((m) => !m.mutating);
+
+  if (!requested) return permitted.filter((m) => m.enabledByDefault);
+  if (requested.toLowerCase() === 'all') return permitted;
 
   const names = requested
     .split(',')
@@ -62,5 +104,21 @@ export function selectModules(
     );
   }
 
-  return names.map((n) => known.get(n)!);
+  const selected = names.map((n) => known.get(n)!);
+
+  // Asking the read-only server for a trading module is a misconfiguration
+  // worth failing on. Silently dropping it would leave an operator believing
+  // they had enabled execution when they had not.
+  if (!allowMutating) {
+    const refused = selected.filter((m) => m.mutating).map((m) => m.name);
+    if (refused.length) {
+      throw new Error(
+        `Module(s) ${refused.join(', ')} can place orders and are not available on the ` +
+          'read-only server. Run robinhood-mcp-trading (with ROBINHOOD_CRYPTO_ENABLE_TRADING=1) ' +
+          'to use them, or remove them from ROBINHOOD_MCP_MODULES.',
+      );
+    }
+  }
+
+  return selected;
 }
