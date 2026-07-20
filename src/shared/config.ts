@@ -10,6 +10,21 @@ import type { KeyObject } from 'node:crypto';
 
 export const DEFAULT_BASE_URL = 'https://trading.robinhood.com';
 
+/**
+ * Where durable jobs live.
+ *
+ * Defaults under the user's home directory rather than the working directory,
+ * so a job survives being started from a different folder and is not
+ * accidentally committed to a repo.
+ */
+export function jobDatabasePath(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.ROBINHOOD_MCP_DB?.trim();
+  if (configured) return configured;
+
+  const home = env.HOME ?? env.USERPROFILE ?? '.';
+  return `${home}/.robinhood-mcp/jobs.db`;
+}
+
 /** Robinhood documents 100 requests/minute per account, bursting to 300. */
 export const RATE_LIMIT_PER_MINUTE = 100;
 export const RATE_LIMIT_BURST = 300;

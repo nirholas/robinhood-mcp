@@ -61,6 +61,81 @@ Ask your assistant: *"What's my Robinhood crypto buying power, and what's BTC tr
 | --- | --- |
 | `place_order` | Market, limit, stop-loss, and stop-limit orders. Previews by default. |
 | `cancel_order` | Best-effort cancellation of an open order. |
+| `get_execution_policy` | The active mode, every limit enforced, and what has been committed. |
+
+### Execution engine (trading server only)
+
+| Tool | Purpose |
+| --- | --- |
+| `algo_list_strategies` | The synthetic order types available, and their parameters. |
+| `algo_start` | Start one as a durable background job. |
+| `algo_list_jobs` | What is currently running against the account. |
+| `algo_get_job` | One job's state, the orders it placed, and its event history. |
+| `algo_cancel_job` | Stop a job placing further orders. |
+
+---
+
+## The execution engine
+
+Robinhood's API offers four order types: `market`, `limit`, `stop_loss`, and
+`stop_limit`. There is no bracket, no OCO, no trailing stop, no TWAP, no
+scheduled DCA. Those are the order types people actually want, and every one of
+them needs something that keeps working after the request returns. A trailing
+stop that exists only for the duration of one tool call is not a trailing stop.
+
+So `algo_start` does not run an algorithm inside the call. It writes a durable
+job and returns; a supervisor advances it from there.
+
+```
+   algo_start ("TWAP 0.5 BTC over 2 hours")
+        |
+        v
+    JobStore (SQLite)  <-->  Supervisor  -->  Strategy.advance()  -->  Executor
+                              (tick loop)
+```
+
+Strategies are pure step functions. They never sleep, never loop, and never
+touch the network; they return the actions they want taken and the state to
+persist. That is what makes them testable without a live account and
+resumable without special cases.
+
+### Keeping jobs moving
+
+An MCP server only runs while a client holds it open, so a job started through
+MCP advances only while that conversation is alive. For unattended execution,
+run the daemon, which owns the same job database:
+
+```bash
+ROBINHOOD_CRYPTO_ENABLE_TRADING=1 npx robinhood-mcp-daemon
+```
+
+Run it under something that restarts it (systemd, launchd, pm2, a container).
+Restarts are safe by design, which is the next section.
+
+### Crash safety
+
+Getting this wrong means double-filling a real order with real money.
+
+The naive design submits an order and records it afterwards. If the process
+dies between those two steps, the order exists at Robinhood and the job has no
+memory of it; on restart the strategy repeats the slice and the user is filled
+twice.
+
+Instead every order is a three-phase write:
+
+1. **Reserve.** Generate the `client_order_id` and persist an intent row
+   *before* any network call.
+2. **Submit.** POST with that exact id, with retries disabled.
+3. **Settle.** Record the response.
+
+On startup the supervisor reconciles: for every still-pending intent it queries
+Robinhood by `client_order_id`. Found means the order was placed before the
+crash, so it is adopted and never resubmitted. Not found means Robinhood never
+saw it. If the check itself fails, the intent is left pending rather than
+guessed at, because an inconclusive answer must not be read as "not found".
+
+Jobs live in `~/.robinhood-mcp/jobs.db` by default (`ROBINHOOD_MCP_DB` to
+override).
 
 ---
 

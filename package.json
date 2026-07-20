@@ -27,12 +27,13 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.5.0"
   },
   "bin": {
     "robinhood-mcp": "./dist/bin/data-server.js",
     "robinhood-mcp-trading": "./dist/bin/trading-server.js",
-    "robinhood-keygen": "./dist/bin/keygen.js"
+    "robinhood-keygen": "./dist/bin/keygen.js",
+    "robinhood-mcp-daemon": "./dist/bin/daemon.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -60,7 +61,9 @@
     "start": "node dist/bin/data-server.js",
     "test": "vitest run",
     "test:live": "vitest run -c vitest.live.config.ts --testTimeout 120000",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "dev:daemon": "tsx src/bin/daemon.ts",
+    "daemon": "node dist/bin/daemon.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

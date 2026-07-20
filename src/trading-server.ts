@@ -14,6 +14,13 @@ import { assertTradingEnabled, loadExecutionPolicy, SpendLedger } from './shared
 import { Executor } from './shared/executor.js';
 import { registerDataTools } from './register-data.js';
 import { registerTradingTools } from './register-trading.js';
+import { registerAlgoTools } from './tools/algo.js';
+import { JobStore } from './engine/store.js';
+import { Supervisor } from './engine/supervisor.js';
+import { ALL_STRATEGIES } from './engine/strategies/index.js';
+import { jobDatabasePath } from './shared/config.js';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { VERSION } from './version.js';
 
 export function createTradingServer(): McpServer {
@@ -32,6 +39,30 @@ export function createTradingServer(): McpServer {
 
   registerDataTools(server, client, credentials);
   registerTradingTools(server, executor);
+
+  // Durable execution jobs. The same database backs the standalone daemon, so
+  // a job started here keeps running under `robinhood-mcp-daemon` after this
+  // conversation ends.
+  const dbPath = jobDatabasePath();
+  mkdirSync(dirname(dbPath), { recursive: true });
+  const store = new JobStore(dbPath);
+  const supervisor = new Supervisor(store, executor, ALL_STRATEGIES);
+
+  registerAlgoTools(server, store, supervisor, () => supervisorRunning);
+
+  // Advance jobs while this server is connected. The daemon is what keeps them
+  // moving when it is not.
+  let supervisorRunning = false;
+  void supervisor.start().then(
+    () => {
+      supervisorRunning = true;
+    },
+    (error: unknown) => {
+      console.error(
+        `[robinhood-mcp-trading] supervisor failed to start: ${error instanceof Error ? error.message : error}`,
+      );
+    },
+  );
   return server;
 }
 
