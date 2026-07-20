@@ -406,7 +406,9 @@ export function registerAlgoStartTools(server: McpServer, deps: AlgoStartDeps): 
         exit_pct: z
           .number()
           .min(0.01)
-          .max(99.99)
+          // Strictly under 100, matching the strategy's own check: a full
+          // retrace is not an exit rule, it is the price going to zero.
+          .lt(100)
           .describe('Exit after this percent retrace from the best price reached in position.'),
         max_duration_minutes: z.number().int().min(1).max(43_200).describe('Hard time limit.'),
       },

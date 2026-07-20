@@ -18,9 +18,9 @@ The data server refuses to load a mutating module (`orders`, `algo`, `risk`), an
 it fails at startup rather than dropping it silently, so an operator can never
 believe they enabled execution when they did not.
 
-Counts: 8 modules, 68 module tools, plus `list_modules`, which every server
-registers. The trading server with `ROBINHOOD_MCP_MODULES=all` exposes 69 tools;
-with the default selection it exposes 48. The data server exposes 16 by default.
+Counts: 8 modules, 72 module tools, plus `list_modules`, which every server
+registers. The trading server with `ROBINHOOD_MCP_MODULES=all` exposes 73 tools;
+with the default selection it exposes 52. The data server exposes 16 by default.
 
 **Sizing conventions.** Prices and quantities are passed as decimal *strings*
 (`"0.001"`, `"65000.00"`), not numbers, so no precision is lost on the way to the
@@ -228,8 +228,8 @@ No parameters.
 
 The synthetic order types Robinhood does not offer, run as durable jobs that
 outlive the tool call which started them. See
-[the synthetic order types](../README.md#the-nine-synthetic-order-types) for what
-each one is for.
+[the synthetic order types](../README.md#the-thirteen-synthetic-order-types) for
+what each one is for.
 
 A start tool **spends real money over time, not just once**: the job keeps
 placing orders until it completes or is cancelled, and it outlives the
@@ -368,6 +368,93 @@ because cancelling it would turn a possible fill into a certain miss.
 | `max_chases` | `integer` | yes | How many times to repost. The opening order does not count. |
 | `offset_bps` | `number` | yes | Basis points from the touch. Positive rests behind it (passive, cheaper, may not fill); negative posts through it (marketable, fills sooner, pays more). |
 | `limit_price` | `string` | no | Hard bound the chase never crosses: a ceiling for a buy, a floor for a sell. |
+
+### `algo_grid_start`
+Place buys below the market and sells above it at regular intervals, and re-arm
+the opposite side each time one fills, harvesting the range. This is spot, so a
+sell can only dispose of inventory the grid itself bought: the job will not sell
+coins its buys have not funded. At most one working order rests at any level at a
+time.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `symbol` | `string` | yes | Trading pair, e.g. `BTC-USD`. |
+| `lower_price` | `string` | yes | Bottom of the range. Buys are placed at and above this. |
+| `upper_price` | `string` | yes | Top of the range. Must be above `lower_price`. |
+| `grid_levels` | `integer` | yes | Number of price levels in the range. 3 to 50. |
+| `quantity_per_grid` | `string` | yes | Base-asset size traded at each level. |
+| `max_cycles` | `integer` | no | Stop after this many completed buy-then-sell cycles. 1 to 10000. Defaults to 100. |
+| `stop_price` | `string` | no | Abandon the grid and market-sell its inventory if price falls here. Must be below `lower_price`. |
+| `max_duration_minutes` | `integer` | no | Hard time limit. 1 to 43200. Defaults to 7 days. |
+
+`max_cycles` and `max_duration_minutes` always carry a value, because a grid with
+neither is a job that never terminates. `stop_price` is the only path that
+liquidates: it cancels the resting orders and market-sells grid inventory.
+
+### `algo_momentum_start`
+Watch a rolling price window, enter when price breaks out of it, and exit on a
+retrace from the extreme reached while in position. The signal is computed from
+the window **before** the current sample is added, so price is measured against
+history rather than partly against itself.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `symbol` | `string` | yes | Trading pair, e.g. `BTC-USD`. |
+| `side` | `"buy" \| "sell"` | yes | `buy` enters on an upside break. `sell` exits a holding on a downside break. |
+| `quantity` | `string` | yes | Size to trade on the signal. |
+| `lookback_ticks` | `integer` | yes | How many sampled prices form the window. One sample per advance. 3 to 500. |
+| `breakout_pct` | `number` | yes | Enter when price exceeds the window high (or low) by this percent. 0.01 to 100. |
+| `exit_pct` | `number` | yes | Exit after this percent retrace from the best price reached in position. 0.01 to under 100. |
+| `max_duration_minutes` | `integer` | yes | Hard time limit. 1 to 43200. |
+
+`side: "sell"` is **not a short**. This API is spot only, so a sell entry is a
+momentum exit from coins the account already holds: sell the downside break, buy
+back when the fall reverses. `init` checks the holding exists before accepting a
+`sell` job, because a strategy that cannot place its own entry is a job that will
+only ever fail.
+
+### `algo_mean_reversion_start`
+Fade extremes: enter when price is `entry_z` standard deviations from the rolling
+mean and exit as it reverts to `exit_z`. The exit has to sit closer to the mean
+than the entry, so `exit_z` must be below `entry_z`.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `symbol` | `string` | yes | Trading pair, e.g. `BTC-USD`. |
+| `quantity` | `string` | yes | Size to trade per entry. |
+| `lookback_ticks` | `integer` | yes | Samples in the rolling window used for the mean and standard deviation. 5 to 500. |
+| `entry_z` | `number` | yes | Deviation from the mean that triggers entry. 0.1 to 10. |
+| `exit_z` | `number` | yes | Deviation at which to exit. 0 to 10. Must be below `entry_z`. |
+| `side_mode` | `"long_only" \| "short_only" \| "both"` | yes | `long_only` buys dips. `short_only` sells rips from existing inventory. `both` does either. |
+| `max_duration_minutes` | `integer` | yes | Hard time limit. 1 to 43200. |
+
+This API is **spot only**: there is no borrow and no short position to open. The
+"short" side does not open a short. It sells an existing holding into an extreme
+high and buys it back when price reverts. `short_only` and `both` are therefore
+rejected at start unless the account already holds enough to cover `quantity`,
+and every short entry re-checks the balance before submitting, because the
+holding can move between starting the job and taking the trade.
+
+### `algo_accumulate_start`
+Build a position only on weakness: buy a slice whenever price sits a set
+percentage below its rolling average, until the target size is reached. When the
+market is strong it buys nothing and waits, which is the point of running this
+instead of a schedule.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `symbol` | `string` | yes | Trading pair, e.g. `BTC-USD`. |
+| `target_quantity` | `string` | yes | Total base-asset size to accumulate. |
+| `slice_quantity` | `string` | yes | Size bought per qualifying dip. Must not exceed `target_quantity`. |
+| `max_price` | `string` | yes | Never buy above this price, whatever the average says. |
+| `buy_below_pct` | `number` | yes | Buy only when price is at least this percent below the rolling average. 0.01 to 99. |
+| `lookback_ticks` | `integer` | yes | Samples forming the rolling average. One sample per advance. 3 to 500. |
+| `max_duration_minutes` | `integer` | yes | Give up after this long, even if the target is not met. 1 to 43200. |
+
+Unlike `algo_dca_start`, which buys on a clock regardless of price, this waits for
+dips and **may finish short of target** if none arrive before the time limit. A
+run that ends short is reported as short. `max_price` is an absolute ceiling
+applied on top of the relative test, and no averaging talks the job out of it.
 
 ### `algo_rebalance_start`
 Drive holdings toward target weights by selling what is overweight and buying

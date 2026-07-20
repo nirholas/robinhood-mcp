@@ -123,7 +123,7 @@ observed.
 A large tool surface hurts an agent rather than helping it: every tool spends context
 and adds a wrong option to choose from. So the toolkit ships its capabilities as
 **modules the operator turns on**, and only the enabled ones are registered. The full
-surface is 69 tools; the default trading selection is 48, and the read-only server is 16.
+surface is 73 tools; the default trading selection is 52, and the read-only server is 16.
 
 `ROBINHOOD_MCP_MODULES=market,orders,algo` selects them. Unset loads a deliberately small
 default set. `all` loads everything, which is useful for a builder exploring the surface

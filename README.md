@@ -2,7 +2,7 @@
 
 An execution toolkit for the **official Robinhood Crypto Trading API**, delivered over the Model Context Protocol.
 
-Robinhood's crypto API exposes four order types and nothing else: `market`, `limit`, `stop_loss`, and `stop_limit`. There is no bracket, no OCO, no trailing stop, no TWAP, no iceberg, no scale-in ladder, no scheduled DCA, no portfolio rebalance. Those are the order types people actually want, and every one of them has the same requirement: something has to keep working after the request returns. A trailing stop that exists only for the duration of one tool call is not a trailing stop. This package synthesizes the nine order types Robinhood lacks and runs them as **durable background jobs** that survive the agent disconnecting, the server restarting, and the machine rebooting. Around that sit ~69 tools across 8 opt-in modules: quotes and holdings, FIFO cost basis and realized P&L, a trade journal, risk limits with an enforced kill switch, and integration diagnostics.
+Robinhood's crypto API exposes four order types and nothing else: `market`, `limit`, `stop_loss`, and `stop_limit`. There is no bracket, no OCO, no trailing stop, no TWAP, no iceberg, no scale-in ladder, no scheduled DCA, no portfolio rebalance. Those are the order types people actually want, and every one of them has the same requirement: something has to keep working after the request returns. A trailing stop that exists only for the duration of one tool call is not a trailing stop. This package synthesizes the thirteen order types Robinhood lacks and runs them as **durable background jobs** that survive the agent disconnecting, the server restarting, and the machine rebooting. Around that sit ~73 tools across 8 opt-in modules: quotes and holdings, FIFO cost basis and realized P&L, a trade journal, risk limits with an enforced kill switch, and integration diagnostics.
 
 > **This is not Robinhood Chain**, and it is not Robinhood equities. It targets the brokerage Crypto Trading API at `trading.robinhood.com`, documented at [docs.robinhood.com/crypto/trading](https://docs.robinhood.com/crypto/trading/).
 
@@ -120,7 +120,7 @@ The toolkit is larger than any one agent should see at once. Every tool spends c
 | --- | --- | --- | --- |
 | `market` | Quotes, holdings, account details, trading pairs, order history. | on | no |
 | `orders` | The four native order types as individual tools, plus the generic `place_order` and `cancel_order`. | on | **yes** |
-| `algo` | The nine synthetic order types, run as durable background jobs. | on | **yes** |
+| `algo` | The thirteen synthetic order types, run as durable background jobs. | on | **yes** |
 | `portfolio` | FIFO cost basis, realized P&L and tax lots, allocation, slippage, volatility, risk-based sizing. | on | no |
 | `risk` | Exposure, concentration, drawdown, pre-trade checks, and the enforced kill switch. | on | **yes** |
 | `journal` | Fills, round-trip trades, win rate and profit factor, daily summaries, stale open orders, CSV export, reconciliation. | off | no |
@@ -131,9 +131,9 @@ The toolkit is larger than any one agent should see at once. Every tool spends c
 
 **How selection works:**
 
-- **Unset** loads the default set (`market`, `orders`, `algo`, `portfolio`, `risk`), minus anything the server cannot host. That is 48 tools on the trading server and 16 on the data server.
+- **Unset** loads the default set (`market`, `orders`, `algo`, `portfolio`, `risk`), minus anything the server cannot host. That is 52 tools on the trading server and 16 on the data server.
 - **A comma-separated list** loads exactly those: `ROBINHOOD_MCP_MODULES=market,orders,risk`.
-- **`all`** loads everything: 69 tools on the trading server.
+- **`all`** loads everything: 73 tools on the trading server.
 
 An unknown module name **fails startup** rather than being silently dropped, because a typo that quietly removes tools is worse than a server that refuses to start.
 
@@ -141,11 +141,11 @@ An unknown module name **fails startup** rather than being silently dropped, bec
 
 The data server refuses to load a mutating module (`orders`, `algo`, `risk`) and fails at startup if asked to, so an operator can never believe they enabled execution when they did not.
 
-Full parameter reference for all 69 tools: **[docs/tools.md](docs/tools.md)**.
+Full parameter reference for all 73 tools: **[docs/tools.md](docs/tools.md)**.
 
 ---
 
-## The nine synthetic order types
+## The thirteen synthetic order types
 
 Each of these is built on top of Robinhood's four primitives by a supervisor that keeps advancing it over time. Every one is started by its own tool with a typed schema, so a missing or misnamed parameter fails at the schema boundary instead of inside the job.
 
@@ -159,9 +159,20 @@ Each of these is built on top of Robinhood's four primitives by a supervisor tha
 | **Ladder** | `algo_ladder_start` | Places a series of resting limit orders across a price range, to scale into or out of a position as price moves. | `total_quantity`, `levels`, `start_price`, `end_price`, `distribution` |
 | **Iceberg** | `algo_iceberg_start` | Works a large order behind a small visible slice, refilling as each slice fills, so the book never shows the full size. | `total_quantity`, `visible_quantity`, `max_duration_minutes`, optional `limit_price` |
 | **Chase** | `algo_chase_start` | Rests a limit order and reposts it as the book moves away, to fill without crossing the spread. | `quantity`, `max_chases`, `offset_bps`, optional `limit_price` bound |
+| **Grid** | `algo_grid_start` | Rests buys below and sells above across a price range, replacing each fill with its opposite one level away, banking the spacing on every round trip. | `lower_price`, `upper_price`, `grid_levels`, `quantity_per_grid`, optional `max_cycles` / `max_duration_minutes` / `stop_price` |
+| **Momentum** | `algo_momentum_start` | Enters when price breaks out of its recent range by a set margin, then exits when it retraces a set fraction of the move it reached. | `side`, `quantity`, `lookback_ticks`, `breakout_pct`, `exit_pct`, `max_duration_minutes` |
+| **Mean reversion** | `algo_mean_reversion_start` | Fades a price that has stretched a set number of standard deviations from its recent mean, and closes the trade when it reverts toward that mean. | `quantity`, `lookback_ticks`, `entry_z`, `exit_z`, `side_mode`, `max_duration_minutes` |
+| **Accumulate** | `algo_accumulate_start` | Buys toward a target size only on weakness, taking a slice whenever price trades a set percentage below its recent average and under a hard ceiling. | `target_quantity`, `slice_quantity`, `max_price`, `buy_below_pct`, `lookback_ticks`, `max_duration_minutes` |
 | **Rebalance** | `algo_rebalance_start` | Drives holdings toward target weights, selling what is overweight and buying what is underweight, sells before buys. | `targets`, `tolerance_bps`, `max_legs_per_tick`, `dry_run` |
 
 Each tool's description states its own failure modes, which are not the same across strategies. A TWAP with a `limit_price` can finish short of the full size. An OCO has unavoidable exposure between one leg filling and the other being cancelled, and reports a double fill as `failed` rather than as success. An iceberg that hits `max_duration_minutes` cancels its working slice and completes under-filled. Read the tool description before running one for real, and use `algo_rebalance_start`'s `dry_run` to see the legs before any of them are sent.
+
+**This API is spot only, which constrains four of these.** There is no borrow and no short position to open, so nothing here shorts:
+
+- **`algo_mean_reversion_start`** with `side_mode` of `short_only` or `both` does not open a short. It sells an existing holding into an extreme high and buys it back on reversion. Both modes are rejected at start unless the account already holds enough to cover `quantity`, and every short entry re-checks the balance before submitting.
+- **`algo_momentum_start`** with `side: "sell"` is the same shape: a momentum exit from coins the account already holds, not a short. `init` refuses the job if the holding does not exist.
+- **`algo_grid_start`** will not sell coins its own buys have not funded. `max_cycles` and `max_duration_minutes` always carry a value (defaults: 100 cycles, 7 days), because a grid with neither never terminates. `stop_price` is the only path that liquidates: it cancels the resting orders and market-sells grid inventory.
+- **`algo_accumulate_start`** waits for dips rather than buying on a clock as `algo_dca_start` does, so it **may finish short of target** if no qualifying dip arrives before `max_duration_minutes`. A run that ends short is reported as short.
 
 ---
 
