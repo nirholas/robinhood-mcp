@@ -37,6 +37,13 @@ export class RobinhoodApiError extends Error {
  * Robinhood states limits are per-endpoint and vary, so this is a floor that
  * keeps a well-behaved client under the global ceiling, not an exact mirror.
  */
+/** A read of the bucket, for diagnostics. Never used to make pacing decisions. */
+export interface RateLimitState {
+  capacity: number;
+  tokens: number;
+  refillPerMs: number;
+}
+
 class TokenBucket {
   private tokens: number;
   private lastRefill: number;
@@ -47,6 +54,17 @@ class TokenBucket {
   ) {
     this.tokens = capacity;
     this.lastRefill = Date.now();
+  }
+
+  /**
+   * Current fill level, refilled first so the reading is not stale.
+   *
+   * The bucket refills lazily on use, so a bucket that has been idle reports a
+   * count from whenever it was last touched unless it is refilled here.
+   */
+  state(): RateLimitState {
+    this.refill();
+    return { capacity: this.capacity, tokens: this.tokens, refillPerMs: this.refillPerMs };
   }
 
   /** Resolve once a token is available. */
@@ -84,6 +102,17 @@ export class RobinhoodCryptoClient {
   private readonly bucket = new TokenBucket(RATE_LIMIT_BURST, RATE_LIMIT_PER_MINUTE / 60_000);
 
   constructor(private readonly credentials: Credentials) {}
+
+  /**
+   * Rate-limiter state, for the ops tools.
+   *
+   * Exposed deliberately rather than reached for by casting past `private`:
+   * diagnostics genuinely need this, and a documented accessor is a contract
+   * that survives refactoring where a cast silently starts returning undefined.
+   */
+  rateLimitState(): RateLimitState {
+    return this.bucket.state();
+  }
 
   get apiVersion(): string {
     return this.credentials.apiVersion;

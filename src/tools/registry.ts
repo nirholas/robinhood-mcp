@@ -21,6 +21,8 @@ import { registerOrderTools } from './orders.js';
 import { registerAlgoTools } from './algo.js';
 import { registerPortfolioTools } from './portfolio.js';
 import { registerRiskTools } from './risk.js';
+import { registerJournalTools } from './journal.js';
+import { registerOpsTools } from './ops.js';
 import { registerDevTools } from './devtools.js';
 
 /**
@@ -121,6 +123,41 @@ const riskModule: ToolModule = {
   },
 };
 
+/**
+ * What actually happened, derived from filled order history.
+ *
+ * Read-only: it reports on trading rather than doing any. Round trips here are
+ * grouped flat-to-flat, which is a different unit from the portfolio module's
+ * FIFO disposals; both say so in their descriptions.
+ */
+const journalModule: ToolModule = {
+  name: 'journal',
+  description:
+    'Fills, round-trip trade history, win rate and profit factor, daily summaries, stale open orders, CSV export.',
+  enabledByDefault: false,
+  mutating: false,
+  register(context) {
+    registerJournalTools(context.server, context.client, context.credentials);
+  },
+};
+
+/**
+ * Diagnostics, for when the server is the thing that is broken.
+ *
+ * Read-only and deliberately resilient: these are what someone runs after a
+ * 401 or a crash, so they degrade to a failing check rather than an exception.
+ */
+const opsModule: ToolModule = {
+  name: 'ops',
+  description:
+    'Health checks, clock skew, key verification, rate-limit state, API version, supervisor and unsettled-intent status.',
+  enabledByDefault: false,
+  mutating: false,
+  register(context) {
+    registerOpsTools(context.server, context.client, context.credentials, context.engine);
+  },
+};
+
 /** Every module the toolkit knows about, in catalogue order. */
 export const ALL_MODULES: ToolModule[] = [
   marketModule,
@@ -128,6 +165,8 @@ export const ALL_MODULES: ToolModule[] = [
   algoModule,
   portfolioModule,
   riskModule,
+  journalModule,
+  opsModule,
   devModule,
 ];
 
