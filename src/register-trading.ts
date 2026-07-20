@@ -16,6 +16,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Executor, OrderRequest } from './shared/executor.js';
 import { toolResult, toolError } from './shared/format.js';
+import { describePolicy, describeSpend, formatSubmitResult } from './shared/order-format.js';
 
 const symbolSchema = z
   .string()
@@ -35,7 +36,11 @@ export function registerTradingTools(server: McpServer, executor: Executor): voi
     {
       title: 'Place order',
       description:
-        'Place a crypto order. THIS SPENDS REAL MONEY: Robinhood has no sandbox. ' +
+        'Place a crypto order of any type. Prefer the narrower buy_market, sell_market, ' +
+        'buy_limit, sell_limit, place_stop_loss and place_stop_limit tools: their schemas ' +
+        'accept only the fields that order type allows, so an invalid combination cannot be ' +
+        'built. Use this one for programmatically generated orders. ' +
+        'THIS SPENDS REAL MONEY: Robinhood has no sandbox. ' +
         (autonomous
           ? 'This server runs in AUTONOMOUS mode, so the order is submitted immediately. '
           : 'Without confirm=true this returns the exact request that would be sent plus a priced estimate, and places nothing. Call once to preview, show the user the numbers, then call again with confirm=true. ') +
@@ -83,31 +88,7 @@ export function registerTradingTools(server: McpServer, executor: Executor): voi
           clientOrderId: args.client_order_id,
         };
 
-        const result = await executor.submitOrder(request, args.confirm);
-
-        if (!result.placed && result.preview) {
-          return toolResult({
-            preview: true,
-            placed: false,
-            message:
-              'Nothing was placed. Review these numbers with the user, then call again with confirm=true.',
-            request: { method: 'POST', body: result.preview.body },
-            estimate: {
-              notional_usd: result.preview.notionalUsd,
-              reference_price: result.preview.referencePrice,
-              priced_from: result.preview.pricedFrom,
-            },
-            policy: describePolicy(executor),
-          });
-        }
-
-        return toolResult({
-          placed: true,
-          mode: policy.mode,
-          estimated_notional_usd: result.notionalUsd,
-          order: result.order,
-          session_spend: describeSpend(executor),
-        });
+        return formatSubmitResult(executor, await executor.submitOrder(request, args.confirm));
       } catch (error) {
         return toolError(error);
       }
@@ -182,28 +163,4 @@ function assertOrderShape(args: {
   if ((type === 'stop_loss' || type === 'stop_limit') && !stop_price) {
     throw new Error(`A ${type} order requires stop_price.`);
   }
-}
-
-function describePolicy(executor: Executor) {
-  const policy = executor.executionPolicy;
-  return {
-    mode: policy.mode,
-    mode_meaning:
-      policy.mode === 'autonomous'
-        ? 'Orders execute immediately; confirm is ignored.'
-        : 'Orders preview first; a second call with confirm=true executes.',
-    max_order_usd: policy.maxOrderUsd,
-    max_daily_usd: policy.maxDailyUsd,
-    symbol_allowlist: policy.symbolAllowlist,
-    buy_only: policy.buyOnly,
-  };
-}
-
-function describeSpend(executor: Executor) {
-  const ledger = executor.spendLedger;
-  return {
-    committed_usd: ledger.spentUsd,
-    remaining_usd: ledger.remainingUsd,
-    note: 'Per-process counter; resets on restart. A runaway brake, not an accounting record.',
-  };
 }

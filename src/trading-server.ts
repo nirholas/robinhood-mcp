@@ -15,6 +15,7 @@ import { Executor } from './shared/executor.js';
 import { registerDataTools } from './register-data.js';
 import { registerTradingTools } from './register-trading.js';
 import { registerAlgoTools } from './tools/algo.js';
+import { registerOrderTools } from './tools/orders.js';
 import { JobStore } from './engine/store.js';
 import { Supervisor } from './engine/supervisor.js';
 import { ALL_STRATEGIES } from './engine/strategies/index.js';
@@ -39,6 +40,7 @@ export function createTradingServer(): McpServer {
 
   registerDataTools(server, client, credentials);
   registerTradingTools(server, executor);
+  registerOrderTools(server, executor);
 
   // Durable execution jobs. The same database backs the standalone daemon, so
   // a job started here keeps running under `robinhood-mcp-daemon` after this
