@@ -63,7 +63,8 @@
     "test:live": "vitest run -c vitest.live.config.ts --testTimeout 120000",
     "prepublishOnly": "npm run build && npm test",
     "dev:daemon": "tsx src/bin/daemon.ts",
-    "daemon": "node dist/bin/daemon.js"
+    "daemon": "node dist/bin/daemon.js",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
