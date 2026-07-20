@@ -14,7 +14,23 @@ import type { Strategy } from '../job.js';
 import { twap } from './twap.js';
 import { trailingStop } from './trailing-stop.js';
 import { bracket } from './bracket.js';
+import { dca } from './dca.js';
+import { ladder } from './ladder.js';
+import { rebalance } from './rebalance.js';
+import { iceberg } from './iceberg.js';
+import { oco } from './oco.js';
+import { chase } from './chase.js';
 
-export const ALL_STRATEGIES: Strategy[] = [twap, trailingStop, bracket];
+export const ALL_STRATEGIES: Strategy[] = [
+  twap,
+  trailingStop,
+  bracket,
+  dca,
+  ladder,
+  rebalance,
+  iceberg,
+  oco,
+  chase,
+];
 
-export { twap, trailingStop, bracket };
+export { twap, trailingStop, bracket, dca, ladder, rebalance, iceberg, oco, chase };
