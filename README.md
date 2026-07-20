@@ -70,8 +70,21 @@ Ask your assistant: *"What's my Robinhood crypto buying power, and what's BTC tr
 
 1. **Separate binary.** The data server registers no tool that can trade. Attaching it to a general-purpose assistant cannot result in an order.
 2. **Explicit opt-in.** The trading server refuses to start unless `ROBINHOOD_CRYPTO_ENABLE_TRADING=1`.
-3. **Confirm gate.** `place_order` defaults to `confirm: false`, returning the exact request it *would* send plus a priced estimate. Nothing is placed until a second call sets `confirm: true`.
-4. **Spend cap.** Every order is priced before submission and rejected above `ROBINHOOD_CRYPTO_MAX_ORDER_USD` (default `$100`).
+3. **Confirm gate.** In the default `guarded` mode, `place_order` returns the exact request it *would* send plus a priced estimate. Nothing is placed until a second call sets `confirm: true`.
+4. **Spend cap.** Every order is priced before submission and rejected above `ROBINHOOD_CRYPTO_MAX_ORDER_USD` (default `$100`), with an optional cumulative `ROBINHOOD_CRYPTO_MAX_DAILY_USD`.
+
+### Autonomous execution
+
+Unattended strategies have no human available to confirm anything, so
+`ROBINHOOD_CRYPTO_AUTONOMOUS=1` executes orders immediately and ignores
+`confirm`.
+
+**The spend caps still apply.** Autonomous removes the human, not the ceiling:
+an unattended agent is exactly where a runaway order is most likely and least
+observed. Every order still routes through one executor that prices it, checks
+it against the per-order cap, the daily cap, the allowlist, and the buy-only
+flag, and refuses outright when the value cannot be determined. Call
+`get_execution_policy` to see the active limits and what has been committed.
 
 The cap **fails closed**: if an order's USD value cannot be determined up front, it is rejected rather than assumed cheap. Writes are never retried, since retrying an ambiguous failure can double-fill.
 
@@ -106,7 +119,9 @@ Scope the API key itself too. Robinhood lets you pick permissions per credential
 | `ROBINHOOD_CRYPTO_API_VERSION` | no | `v1` | `v1` or `v2`. v2 adds fee tiers. |
 | `ROBINHOOD_CRYPTO_BASE_URL` | no | `https://trading.robinhood.com` | Override the API host. |
 | `ROBINHOOD_CRYPTO_ENABLE_TRADING` | trading only | `0` | Must be `1` to start the trading server. |
-| `ROBINHOOD_CRYPTO_MAX_ORDER_USD` | no | `100` | Hard ceiling per order. |
+| `ROBINHOOD_CRYPTO_AUTONOMOUS` | no | `0` | Set `1` to execute immediately with no confirm step. |
+| `ROBINHOOD_CRYPTO_MAX_ORDER_USD` | no | `100` | Hard ceiling per order. Applies in every mode. |
+| `ROBINHOOD_CRYPTO_MAX_DAILY_USD` | no | unset | Cumulative per-process ceiling. |
 | `ROBINHOOD_CRYPTO_SYMBOL_ALLOWLIST` | no | unset | Comma-separated pairs; when set, only these may trade. |
 | `ROBINHOOD_CRYPTO_BUY_ONLY` | no | `0` | Set `1` to reject sell orders. |
 

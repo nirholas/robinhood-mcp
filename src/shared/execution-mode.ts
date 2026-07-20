@@ -38,6 +38,32 @@ export class PolicyError extends Error {
 
 export const DEFAULT_MAX_ORDER_USD = 100;
 
+export class TradingDisabledError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TradingDisabledError';
+  }
+}
+
+/**
+ * Assert the operator explicitly enabled trading.
+ *
+ * Separate from the execution mode: this decides whether the trading server
+ * may start at all, so it can never be launched by accident.
+ *
+ * @throws {TradingDisabledError} If `ROBINHOOD_CRYPTO_ENABLE_TRADING` is not `1`.
+ */
+export function assertTradingEnabled(env: NodeJS.ProcessEnv = process.env): void {
+  if (env.ROBINHOOD_CRYPTO_ENABLE_TRADING?.trim() !== '1') {
+    throw new TradingDisabledError(
+      'Trading is disabled. This server places real orders with real money and has no sandbox. ' +
+        'Set ROBINHOOD_CRYPTO_ENABLE_TRADING=1 to enable it, and set ROBINHOOD_CRYPTO_MAX_ORDER_USD ' +
+        'to a ceiling you are comfortable losing. Read-only tools are available without this flag ' +
+        'via the `robinhood-mcp` data server.',
+    );
+  }
+}
+
 export function loadExecutionPolicy(env: NodeJS.ProcessEnv = process.env): ExecutionPolicy {
   const mode: ExecutionMode =
     env.ROBINHOOD_CRYPTO_AUTONOMOUS?.trim() === '1' ? 'autonomous' : 'guarded';

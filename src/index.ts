@@ -26,13 +26,24 @@ export {
 } from './shared/config.js';
 export { endpointsFor, requiresAccountNumber, type EndpointSet } from './shared/endpoints.js';
 export {
-  loadTradingGuards,
-  assertOrderAllowed,
-  estimateNotionalUsd,
-  GuardViolationError,
+  loadExecutionPolicy,
+  assertTradingEnabled,
+  SpendLedger,
+  PolicyError,
   TradingDisabledError,
-  type TradingGuards,
-} from './shared/guards.js';
+  DEFAULT_MAX_ORDER_USD,
+  type ExecutionPolicy,
+  type ExecutionMode,
+} from './shared/execution-mode.js';
+export {
+  Executor,
+  buildOrderBody,
+  roundToIncrement,
+  type OrderRequest,
+  type PricedOrder,
+  type SubmitResult,
+} from './shared/executor.js';
+export { selectModules, type ToolModule, type ModuleContext } from './tools/module.js';
 export { createDataServer, main as runDataServer } from './data-server.js';
 export { createTradingServer, main as runTradingServer } from './trading-server.js';
 export { VERSION } from './version.js';

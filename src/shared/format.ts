@@ -1,7 +1,7 @@
 /** Shared tool-result helpers. */
 
 import { RobinhoodApiError } from './client.js';
-import { GuardViolationError } from './guards.js';
+import { PolicyError } from './execution-mode.js';
 
 export interface ToolResponse {
   content: Array<{ type: 'text'; text: string }>;
@@ -24,7 +24,7 @@ export function toolResult(payload: unknown): ToolResponse {
  */
 export function toolError(error: unknown): ToolResponse {
   const message =
-    error instanceof RobinhoodApiError || error instanceof GuardViolationError
+    error instanceof RobinhoodApiError || error instanceof PolicyError
       ? error.message
       : error instanceof Error
         ? error.message
