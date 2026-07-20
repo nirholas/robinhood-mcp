@@ -1,7 +1,7 @@
 /**
  * How aggressively this server executes.
  *
- * Execution is the point of this package — the read-only path exists so that
+ * Execution is the point of this package: the read-only path exists so that
  * an agent can price a trade before making it, not as the destination. What
  * varies is how much human confirmation sits in front of a live order.
  *
@@ -11,7 +11,7 @@
  * confirm anything.
  *
  * The spend cap applies in BOTH modes. Autonomous removes the human, not the
- * ceiling — an unattended agent is exactly the case where a runaway order is
+ * ceiling: an unattended agent is exactly the case where a runaway order is
  * most likely and least observed.
  */
 

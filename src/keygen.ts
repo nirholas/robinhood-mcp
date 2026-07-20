@@ -39,7 +39,7 @@ export function main(): void {
   // stdout stays parseable for scripting; guidance goes to stderr.
   console.error('Robinhood Crypto API keypair\n');
   console.error('1. Register the PUBLIC key at https://robinhood.com/account/crypto');
-  console.error('   (web classic only — not the mobile app, not the new web UI).');
+  console.error('   (web classic only: not the mobile app, not the new web UI).');
   console.error('2. Robinhood issues an API key. Set it as ROBINHOOD_CRYPTO_API_KEY.');
   console.error('3. Set the PRIVATE key below as ROBINHOOD_CRYPTO_PRIVATE_KEY.');
   console.error('   Treat it like a password: it authorizes trades. Never commit it.\n');

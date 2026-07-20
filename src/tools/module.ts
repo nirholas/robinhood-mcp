@@ -75,7 +75,7 @@ export interface ToolModule {
  * Resolve which modules to load.
  *
  * `all` enables everything. An unknown name is an error rather than a silent
- * no-op — a typo that quietly drops tools is worse than a failed startup.
+ * no-op: a typo that quietly drops tools is worse than a failed startup.
  */
 export function selectModules(
   available: ToolModule[],

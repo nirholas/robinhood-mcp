@@ -6,7 +6,7 @@
  *
  * Responses are returned as-is. Robinhood's published schemas and the two
  * community clients disagree on several field names, so this client does not
- * remap fields — a wrong mapping silently corrupts data, while a pass-through
+ * remap fields: a wrong mapping silently corrupts data, while a pass-through
  * stays correct even when the upstream shape changes.
  */
 
@@ -266,7 +266,7 @@ export class RobinhoodCryptoClient {
       guidanceFor(response.status),
     ]
       .filter(Boolean)
-      .join(' — ');
+      .join(': ');
 
     return new RobinhoodApiError(
       redact(message, this.credentials),
@@ -292,7 +292,7 @@ function guidanceFor(status: number): string {
     case 403:
       return 'The API credential lacks the required permission. Re-check the scopes selected when the key was created (read vs. order placement), and any IP allowlist on the key.';
     case 404:
-      return 'Check the path, including its trailing slash — Robinhood requires it.';
+      return 'Check the path, including its trailing slash: Robinhood requires it.';
     case 429:
       return 'Rate limited (documented: 100 requests/minute, 300 burst).';
     default:

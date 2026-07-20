@@ -138,8 +138,8 @@ describe("Robinhood's published conformance vector", () => {
    * than the accompanying table shows).
    *
    * This is pinned as a test so the quirk stays documented and nobody "fixes"
-   * a correct implementation to chase it. Signing the JSON body — what every
-   * working client does, and what Robinhood's own sample code does at runtime —
+   * a correct implementation to chase it. Signing the JSON body: what every
+   * working client does, and what Robinhood's own sample code does at runtime , 
    * is correct.
    */
   const DICT_REPR_BODY =

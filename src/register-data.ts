@@ -1,5 +1,5 @@
 /**
- * Read-only tools. Registered on both servers — the trading server is a
+ * Read-only tools. Registered on both servers: the trading server is a
  * superset, so an agent never needs two connections to do useful work.
  */
 
@@ -229,7 +229,7 @@ export function registerDataTools(
     {
       title: 'Get connection info',
       description:
-        'Report how this server is configured — API version, base URL, and the public key derived from the configured private key — without revealing any secret. Use this first when authentication fails: if the public key shown here does not match the one registered with Robinhood, the wrong private key is configured.',
+        'Report how this server is configured: API version, base URL, and the public key derived from the configured private key: without revealing any secret. Use this first when authentication fails: if the public key shown here does not match the one registered with Robinhood, the wrong private key is configured.',
       inputSchema: {},
     },
     async () => {

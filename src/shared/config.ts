@@ -1,7 +1,7 @@
 /**
  * Environment configuration for both servers.
  *
- * Credentials are read from the environment only — never from arguments, and
+ * Credentials are read from the environment only: never from arguments, and
  * never echoed back through a tool result.
  */
 

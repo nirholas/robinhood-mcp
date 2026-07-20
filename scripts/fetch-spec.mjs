@@ -3,7 +3,7 @@
  * Fetch Robinhood's Crypto Trading API OpenAPI document.
  *
  * Robinhood serves its API reference as a client-rendered SPA and publishes no
- * spec URL — `/openapi.json` and friends all 404. The document is, however,
+ * spec URL: `/openapi.json` and friends all 404. The document is, however,
  * inlined as a `JSON.parse('...')` string literal inside the page's own
  * webpack chunk. This script locates that chunk and extracts it.
  *
@@ -56,7 +56,7 @@ function extractSpec(source) {
     const literal = source.slice(quoteStart + 1, cursor);
     if (literal.includes('"openapi"')) {
       // Two layers of escaping: the JS string literal, then the JSON inside it.
-      // Let the JS engine unwrap the first layer — hand-rolling that unescape
+      // Let the JS engine unwrap the first layer: hand-rolling that unescape
       // gets backslash sequences in the embedded code samples wrong. Evaluating
       // a bare string literal executes no code.
       const jsString = runInNewContext(`'${literal}'`);

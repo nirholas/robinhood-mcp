@@ -7,7 +7,7 @@
  *
  * These tests place no orders and are safe against a funded account. They
  * exist because the unit tests cannot prove the signature is accepted by
- * Robinhood — only a real 200 can.
+ * Robinhood: only a real 200 can.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';

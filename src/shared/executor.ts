@@ -324,7 +324,7 @@ export class Executor {
    * `client_order_id` and double-fill.
    *
    * The search is bounded by the intent's own creation time, which is what
-   * makes it terminate conclusively — Robinhood has no `client_order_id`
+   * makes it terminate conclusively: Robinhood has no `client_order_id`
    * filter, so an unbounded walk is the entire order history.
    */
   async findOrderByClientOrderId(

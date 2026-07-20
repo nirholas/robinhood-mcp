@@ -1,15 +1,15 @@
 /**
  * Ed25519 request signing for the Robinhood Crypto Trading API.
  *
- * Robinhood authenticates every request with three headers — `x-api-key`,
- * `x-timestamp`, and `x-signature` — where the signature is a detached Ed25519
+ * Robinhood authenticates every request with three headers: `x-api-key`,
+ * `x-timestamp`, and `x-signature`: where the signature is a detached Ed25519
  * signature over:
  *
  *     message = api_key + timestamp + path + method + body
  *
  * concatenated with no separators. The private key Robinhood issues is a
  * base64-encoded 32-byte Ed25519 *seed*, not an expanded 64-byte keypair and
- * not PKCS#8 — mixing those up is the most common integration failure.
+ * not PKCS#8: mixing those up is the most common integration failure.
  *
  * @see https://docs.robinhood.com/crypto/trading/
  */
@@ -97,7 +97,7 @@ export function publicKeyFromBase64(base64Key: string): KeyObject {
  * Build the exact byte string Robinhood signs.
  *
  * `path` must include the query string, and `body` must be the exact serialized
- * JSON that goes on the wire — serialize once, sign that string, send that same
+ * JSON that goes on the wire: serialize once, sign that string, send that same
  * string. Re-serializing between signing and sending changes key order or
  * whitespace and yields a well-formed request with an invalid signature.
  */

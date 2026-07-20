@@ -70,7 +70,7 @@ A tool call does not execute an algorithm. It **enqueues a job** and returns. Th
 supervisor owns execution from then on, and the job survives the agent disconnecting,
 the MCP server restarting, and the machine rebooting.
 
-### `shared/executor.ts` — the choke point
+### `shared/executor.ts`: the choke point
 
 Every order in the package reaches Robinhood through `Executor.submitOrder`. Direct
 order tools and multi-leg algorithms both go through it, so a spend cap or allowlist
@@ -80,7 +80,7 @@ they never touch the HTTP client.
 This is load-bearing. A new mutating tool that calls `client.post` directly is a bug,
 not a shortcut.
 
-### `shared/kill-switch.ts` — the emergency stop
+### `shared/kill-switch.ts`: the emergency stop
 
 Durable state in the job database, read from disk on **every** order and never cached,
 checked inside `Executor` rather than by any tool.
@@ -101,7 +101,7 @@ switch was thrown.
 It fails closed: a row that cannot be parsed reads as engaged. Resuming trading because
 a row got corrupted is exactly the failure a kill switch exists to prevent.
 
-### `shared/execution-mode.ts` — how much confirmation sits in front of an order
+### `shared/execution-mode.ts`: how much confirmation sits in front of an order
 
 `guarded` (default) returns a priced preview on the first call and executes on a second
 call carrying `confirm: true`. `autonomous` executes immediately, for unattended
@@ -111,18 +111,19 @@ The spend cap applies in **both** modes. Autonomous removes the human, not the c
 An unattended agent is exactly the case where a runaway order is most likely and least
 observed.
 
-### `engine/` — durable jobs and the supervisor
+### `engine/`: durable jobs and the supervisor
 
-- `store.ts` — SQLite (`node:sqlite`) persistence for jobs, legs, intents and events.
-- `job.ts` — the job model and its state machine.
-- `supervisor.ts` — the tick loop that advances due jobs.
-- `strategies/` — one file per synthetic order type.
+- `store.ts`: SQLite (`node:sqlite`) persistence for jobs, legs, intents and events.
+- `job.ts`: the job model and its state machine.
+- `supervisor.ts`: the tick loop that advances due jobs.
+- `strategies/`: one file per synthetic order type.
 
-### `tools/` — modular tool surface
+### `tools/`: modular tool surface
 
 A large tool surface hurts an agent rather than helping it: every tool spends context
-and adds a wrong option to choose from. So the toolkit ships >100 capabilities as
-**modules the operator turns on**, and only the enabled ones are registered.
+and adds a wrong option to choose from. So the toolkit ships its capabilities as
+**modules the operator turns on**, and only the enabled ones are registered. The full
+surface is 69 tools; the default trading selection is 48, and the read-only server is 16.
 
 `ROBINHOOD_MCP_MODULES=market,orders,algo` selects them. Unset loads a deliberately small
 default set. `all` loads everything, which is useful for a builder exploring the surface
@@ -183,7 +184,7 @@ asks Robinhood whether an order with that `client_order_id` exists. The answer h
 The third state is not defensive padding. Robinhood has **no `client_order_id` query
 filter**, so the lookup is a bounded walk of order history. Collapsing "I did not finish
 looking" into "it does not exist" would abandon an intent whose order is live, and the
-strategy would then re-place that slice under a fresh `client_order_id` — a double fill
+strategy would then re-place that slice under a fresh `client_order_id`, a double fill
 with real money. `Executor.findOrderByClientOrderId` bounds the walk by the intent's own
 `created_at` so it terminates conclusively in the normal case, and reports
 `inconclusive` rather than guessing when it cannot.

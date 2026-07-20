@@ -79,10 +79,17 @@ export class Supervisor {
   /**
    * Resolve orders that were reserved but never settled.
    *
-   * For each `pending` intent, ask Robinhood whether the order exists. Found
-   * means the crash happened after submission: adopt it, never resubmit.
-   * Not found means Robinhood never saw it, so it is safe to retry later with
-   * the same `client_order_id`.
+   * For each `pending` intent, ask Robinhood whether the order exists. The
+   * answer has three states and they must stay distinct:
+   *
+   * - found: the crash happened after submission. Adopt it, never resubmit.
+   * - not_found: conclusively absent, so the slice can be reconsidered.
+   * - inconclusive: the search did not finish. Leave it pending.
+   *
+   * Robinhood has no `client_order_id` filter, so the lookup is a bounded walk
+   * of order history. Reading an unfinished search as absence would abandon an
+   * intent whose order is live, and the strategy would re-place that slice
+   * under a fresh id: a double fill with real money.
    */
   async reconcile(): Promise<{ adopted: number; released: number; unresolved: number }> {
     const pending = this.store.pendingIntents();
@@ -132,7 +139,7 @@ export class Supervisor {
         }
 
         // Conclusively absent: Robinhood never saw it. Mark abandoned rather
-        // than auto-resubmitting — the strategy decides on its next advance
+        // than auto-resubmitting: the strategy decides on its next advance
         // whether the slice is still wanted, since the market has moved.
         this.store.settleIntent(intent.clientOrderId, {
           status: 'abandoned',
