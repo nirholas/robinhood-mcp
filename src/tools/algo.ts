@@ -12,6 +12,7 @@ import type { JobStore } from '../engine/store.js';
 import type { Supervisor } from '../engine/supervisor.js';
 import { isTerminal } from '../engine/job.js';
 import { toolResult, toolError } from '../shared/format.js';
+import { registerAlgoStartTools } from './algo-start.js';
 
 export function registerAlgoTools(
   server: McpServer,
@@ -19,6 +20,8 @@ export function registerAlgoTools(
   supervisor: Supervisor,
   daemonRunning: () => boolean,
 ): void {
+  registerAlgoStartTools(server, { store, supervisor, daemonRunning });
+
   server.registerTool(
     'algo_list_strategies',
     {
@@ -47,7 +50,12 @@ export function registerAlgoTools(
     {
       title: 'Start an execution job',
       description:
-        'Start a synthetic order type as a durable background job. THIS SPENDS REAL MONEY over time, not just once: the job keeps placing orders until it completes or is cancelled. Call algo_list_strategies first to see the parameters a strategy needs. The job survives this conversation, so cancel it explicitly when it is no longer wanted.',
+        'Start a synthetic order type as a durable background job, passing parameters as an untyped record. ' +
+        'Prefer the per-strategy tools (algo_twap_start, algo_bracket_start, and so on): they declare the ' +
+        'parameters that strategy actually takes, so a missing or misnamed field is caught by the schema ' +
+        'rather than inside the job. Use this one only for a strategy assembled programmatically. ' +
+        'THIS SPENDS REAL MONEY over time, not just once: the job keeps placing orders until it completes ' +
+        'or is cancelled, and it survives this conversation, so cancel it explicitly when unwanted.',
       inputSchema: {
         strategy: z.string().min(1).describe('Strategy name, e.g. "twap".'),
         params: z
