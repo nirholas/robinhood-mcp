@@ -98,11 +98,15 @@ function isError(result: unknown): boolean {
 
 /** Every strategy in the catalogue should have a start tool. */
 const EXPECTED_TOOLS = [
+  'algo_accumulate_start',
   'algo_bracket_start',
   'algo_chase_start',
   'algo_dca_start',
+  'algo_grid_start',
   'algo_iceberg_start',
   'algo_ladder_start',
+  'algo_mean_reversion_start',
+  'algo_momentum_start',
   'algo_oco_start',
   'algo_rebalance_start',
   'algo_trailing_stop_start',
@@ -151,6 +155,18 @@ describe('per-strategy start tools', () => {
     );
     expect(required('algo_rebalance_start')).toEqual(
       expect.arrayContaining(['targets', 'tolerance_bps', 'max_legs_per_tick']),
+    );
+    expect(required('algo_grid_start')).toEqual(
+      expect.arrayContaining(['lower_price', 'upper_price', 'grid_levels', 'quantity_per_grid']),
+    );
+    expect(required('algo_momentum_start')).toEqual(
+      expect.arrayContaining(['lookback_ticks', 'breakout_pct', 'exit_pct']),
+    );
+    expect(required('algo_mean_reversion_start')).toEqual(
+      expect.arrayContaining(['entry_z', 'exit_z', 'side_mode']),
+    );
+    expect(required('algo_accumulate_start')).toEqual(
+      expect.arrayContaining(['target_quantity', 'slice_quantity', 'buy_below_pct']),
     );
   });
 

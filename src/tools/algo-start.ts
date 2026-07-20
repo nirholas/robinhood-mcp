@@ -339,6 +339,149 @@ export function registerAlgoStartTools(server: McpServer, deps: AlgoStartDeps): 
   );
 
   server.registerTool(
+    'algo_grid_start',
+    {
+      title: 'Start a grid bot',
+      description:
+        'Place buys below the market and sells above it at regular intervals, and re-arm the ' +
+        `opposite side each time one fills, harvesting the range. ${STAKES} ` +
+        'This is spot, so a sell can only dispose of inventory the grid itself bought: the job ' +
+        'will not sell coins its buys have not funded. It ends after max_cycles or ' +
+        'max_duration_minutes, both of which always have a value, because a grid with neither is ' +
+        'a job that never stops. stop_price is the only path that liquidates: it cancels resting ' +
+        'orders and market-sells grid inventory.',
+      inputSchema: {
+        symbol,
+        lower_price: decimal.describe('Bottom of the range. Buys are placed at and above this.'),
+        upper_price: decimal.describe('Top of the range. Must be above lower_price.'),
+        grid_levels: z.number().int().min(3).max(50).describe('Number of price levels in the range.'),
+        quantity_per_grid: decimal.describe('Base-asset size traded at each level.'),
+        max_cycles: z
+          .number()
+          .int()
+          .min(1)
+          .max(10_000)
+          .optional()
+          .describe('Stop after this many completed buy-then-sell cycles. Defaults to 100.'),
+        stop_price: decimal
+          .optional()
+          .describe('Abandon the grid and market-sell its inventory if price falls here. Must be below lower_price.'),
+        max_duration_minutes: z
+          .number()
+          .int()
+          .min(1)
+          .max(43_200)
+          .optional()
+          .describe('Hard time limit. Defaults to 7 days.'),
+      },
+    },
+    async (args) => startJob('grid', args),
+  );
+
+  server.registerTool(
+    'algo_momentum_start',
+    {
+      title: 'Start a momentum entry',
+      description:
+        'Watch a rolling price window, enter when price breaks out of it, and exit on a retrace ' +
+        `from the extreme reached while in position. ${STAKES} ` +
+        'The signal is computed from the window BEFORE the current sample is added, so price is ' +
+        'measured against history rather than partly against itself. side "sell" exits an existing ' +
+        'holding on a downside break; it is not a short, because this API is spot only.',
+      inputSchema: {
+        symbol,
+        side: side.describe('buy enters on an upside break. sell exits a holding on a downside break.'),
+        quantity: decimal.describe('Size to trade on the signal.'),
+        lookback_ticks: z
+          .number()
+          .int()
+          .min(3)
+          .max(500)
+          .describe('How many sampled prices form the window. One sample per advance.'),
+        breakout_pct: z
+          .number()
+          .min(0.01)
+          .max(100)
+          .describe('Enter when price exceeds the window high (or low) by this percent.'),
+        exit_pct: z
+          .number()
+          .min(0.01)
+          .max(99.99)
+          .describe('Exit after this percent retrace from the best price reached in position.'),
+        max_duration_minutes: z.number().int().min(1).max(43_200).describe('Hard time limit.'),
+      },
+    },
+    async (args) => startJob('momentum', args),
+  );
+
+  server.registerTool(
+    'algo_mean_reversion_start',
+    {
+      title: 'Start a mean-reversion trade',
+      description:
+        'Fade extremes: enter when price is entry_z standard deviations from the rolling mean and ' +
+        `exit as it reverts to exit_z. ${STAKES} ` +
+        'This API is spot only, so the "short" side means reducing an existing holding, not opening ' +
+        'a short. short_only and both are rejected at start unless the account already holds enough ' +
+        'to cover quantity, and every short entry re-checks the balance before submitting.',
+      inputSchema: {
+        symbol,
+        quantity: decimal.describe('Size to trade per entry.'),
+        lookback_ticks: z
+          .number()
+          .int()
+          .min(5)
+          .max(500)
+          .describe('Samples in the rolling window used for the mean and standard deviation.'),
+        entry_z: z.number().min(0.1).max(10).describe('Deviation from the mean that triggers entry.'),
+        exit_z: z.number().min(0).max(10).describe('Deviation at which to exit. Must be below entry_z.'),
+        side_mode: z
+          .enum(['long_only', 'short_only', 'both'])
+          .describe('long_only buys dips. short_only sells rips from existing inventory. both does either.'),
+        max_duration_minutes: z.number().int().min(1).max(43_200).describe('Hard time limit.'),
+      },
+    },
+    async (args) => startJob('mean_reversion', args),
+  );
+
+  server.registerTool(
+    'algo_accumulate_start',
+    {
+      title: 'Start opportunistic accumulation',
+      description:
+        'Build a position only on weakness: buy a slice whenever price sits a set percentage below ' +
+        `its rolling average, until the target size is reached. ${STAKES} ` +
+        'Unlike algo_dca_start, which buys on a clock regardless of price, this waits for dips and ' +
+        'may finish short of target if none arrive before the time limit. max_price is an absolute ' +
+        'ceiling applied on top of the relative test.',
+      inputSchema: {
+        symbol,
+        target_quantity: decimal.describe('Total base-asset size to accumulate.'),
+        slice_quantity: decimal.describe('Size bought per qualifying dip. Must not exceed target_quantity.'),
+        max_price: decimal.describe('Never buy above this price, whatever the average says.'),
+        buy_below_pct: z
+          .number()
+          .min(0.01)
+          .max(99)
+          .describe('Buy only when price is at least this percent below the rolling average.'),
+        lookback_ticks: z
+          .number()
+          .int()
+          .min(3)
+          .max(500)
+          .describe('Samples forming the rolling average. One sample per advance.'),
+        max_duration_minutes: z
+          .number()
+          .int()
+          .min(1)
+          .max(43_200)
+          .describe('Give up after this long, even if the target is not met.'),
+      },
+    },
+    async (args) => startJob('accumulate', args),
+  );
+
+  server.registerTool(
     'algo_rebalance_start',
     {
       title: 'Start a portfolio rebalance',

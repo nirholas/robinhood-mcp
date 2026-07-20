@@ -20,6 +20,10 @@ import { rebalance } from './rebalance.js';
 import { iceberg } from './iceberg.js';
 import { oco } from './oco.js';
 import { chase } from './chase.js';
+import { grid } from './grid.js';
+import { momentum } from './momentum.js';
+import { meanReversion } from './mean-reversion.js';
+import { accumulate } from './accumulate.js';
 
 export const ALL_STRATEGIES: Strategy[] = [
   twap,
@@ -31,6 +35,24 @@ export const ALL_STRATEGIES: Strategy[] = [
   iceberg,
   oco,
   chase,
+  grid,
+  momentum,
+  meanReversion,
+  accumulate,
 ];
 
-export { twap, trailingStop, bracket, dca, ladder, rebalance, iceberg, oco, chase };
+export {
+  twap,
+  trailingStop,
+  bracket,
+  dca,
+  ladder,
+  rebalance,
+  iceberg,
+  oco,
+  chase,
+  grid,
+  momentum,
+  meanReversion,
+  accumulate,
+};
