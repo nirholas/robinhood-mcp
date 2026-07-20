@@ -3,7 +3,7 @@
   "name": "io.github.nirholas/robinhood-mcp",
   "title": "Robinhood Crypto",
   "description": "Robinhood Crypto Trading API for AI agents: quotes, holdings, orders read-only; opt-in trading.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "websiteUrl": "https://github.com/nirholas/robinhood-mcp#readme",
   "repository": {
     "url": "https://github.com/nirholas/robinhood-mcp",
@@ -14,7 +14,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "robinhood-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

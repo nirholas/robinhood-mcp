@@ -1,7 +1,7 @@
 {
   "name": "robinhood-mcp",
   "mcpName": "io.github.nirholas/robinhood-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Model Context Protocol servers for the official Robinhood Crypto Trading API: a read-only server (quotes, holdings, orders, account) and an explicitly opt-in trading server with hard spend caps and a confirm gate. Ed25519 request signing verified against Robinhood's own key material.",
   "keywords": [
     "mcp",
