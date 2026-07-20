@@ -12,6 +12,8 @@ class FakeClient {
   posts: Array<{ path: string; body: unknown }> = [];
   /** Orders the API will report; drives reconciliation outcomes. */
   upstreamOrders: Array<Record<string, unknown>> = [];
+  /** When true, the page walk reports that it did not finish. */
+  truncatePageWalk = false;
   failNextPost: Error | null = null;
   price = 100;
 
@@ -42,7 +44,7 @@ class FakeClient {
   }
 
   async getAllPages(): Promise<{ results: unknown[]; truncated: boolean }> {
-    return { results: this.upstreamOrders, truncated: false };
+    return { results: this.upstreamOrders, truncated: this.truncatePageWalk };
   }
 }
 
@@ -249,7 +251,7 @@ describe('crash reconciliation', () => {
 
     const result = await supervisor.reconcile();
 
-    expect(result).toEqual({ adopted: 1, released: 0 });
+    expect(result).toEqual({ adopted: 1, released: 0, unresolved: 0 });
     const intent = store.getIntentByClientOrderId('coid-1');
     expect(intent?.status).toBe('submitted');
     expect(intent?.orderId).toBe('upstream-9');
@@ -266,7 +268,7 @@ describe('crash reconciliation', () => {
 
     const result = await supervisor.reconcile();
 
-    expect(result).toEqual({ adopted: 0, released: 1 });
+    expect(result).toEqual({ adopted: 0, released: 1, unresolved: 0 });
     expect(store.getIntentByClientOrderId('coid-2')?.status).toBe('abandoned');
   });
 
@@ -275,18 +277,63 @@ describe('crash reconciliation', () => {
     const { store, executor, supervisor } = harness([oneShot]);
     store.reserveIntent({ jobId: null, clientOrderId: 'coid-3', body: {}, notionalUsd: 10 });
 
-    executor.orders = async () => {
+    executor.findOrderByClientOrderId = async () => {
       throw new Error('network down');
     };
 
     const result = await supervisor.reconcile();
 
-    expect(result).toEqual({ adopted: 0, released: 0 });
+    expect(result).toEqual({ adopted: 0, released: 0, unresolved: 1 });
     expect(store.getIntentByClientOrderId('coid-3')?.status).toBe('pending');
+  });
+
+  it('does not abandon an intent when the search was truncated', async () => {
+    // The money-losing bug this guards: a bounded walk that did not reach the
+    // order must never be read as proof the order does not exist. Abandoning
+    // here lets the strategy re-place the slice under a new client_order_id.
+    const { store, client, supervisor } = harness([oneShot]);
+    store.reserveIntent({ jobId: null, clientOrderId: 'coid-4', body: {}, notionalUsd: 10 });
+
+    client.upstreamOrders = [];
+    client.truncatePageWalk = true;
+
+    const result = await supervisor.reconcile();
+
+    expect(result).toEqual({ adopted: 0, released: 0, unresolved: 1 });
+    expect(store.getIntentByClientOrderId('coid-4')?.status).toBe('pending');
+  });
+
+  it('still adopts a match found within a truncated page walk', async () => {
+    // Truncation only blocks the negative conclusion; a hit is still a hit.
+    const { store, client, supervisor } = harness([oneShot]);
+    store.reserveIntent({ jobId: null, clientOrderId: 'coid-5', body: {}, notionalUsd: 10 });
+
+    client.upstreamOrders = [{ id: 'upstream-5', client_order_id: 'coid-5', state: 'open' }];
+    client.truncatePageWalk = true;
+
+    const result = await supervisor.reconcile();
+
+    expect(result).toEqual({ adopted: 1, released: 0, unresolved: 0 });
+    expect(store.getIntentByClientOrderId('coid-5')?.status).toBe('submitted');
+  });
+
+  it('retries an unresolved intent on the next reconcile', async () => {
+    const { store, client, supervisor } = harness([oneShot]);
+    store.reserveIntent({ jobId: null, clientOrderId: 'coid-6', body: {}, notionalUsd: 10 });
+
+    client.truncatePageWalk = true;
+    expect((await supervisor.reconcile()).unresolved).toBe(1);
+
+    // The page ceiling stops being a problem; the intent resolves.
+    client.truncatePageWalk = false;
+    client.upstreamOrders = [{ id: 'upstream-6', client_order_id: 'coid-6', state: 'filled' }];
+
+    expect((await supervisor.reconcile()).adopted).toBe(1);
+    expect(store.getIntentByClientOrderId('coid-6')?.status).toBe('submitted');
   });
 
   it('is a no-op when nothing is unsettled', async () => {
     const { supervisor } = harness([oneShot]);
-    expect(await supervisor.reconcile()).toEqual({ adopted: 0, released: 0 });
+    expect(await supervisor.reconcile()).toEqual({ adopted: 0, released: 0, unresolved: 0 });
   });
 });

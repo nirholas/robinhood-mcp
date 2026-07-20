@@ -36,6 +36,23 @@ export interface PricedOrder {
   pricedFrom: string;
 }
 
+/**
+ * Result of a `client_order_id` lookup.
+ *
+ * Three states, deliberately. `inconclusive` is the one that matters: it means
+ * the search did not complete, and the caller must not infer absence from it.
+ */
+export type OrderLookup =
+  | { status: 'found'; order: Record<string, unknown> }
+  | { status: 'not_found' }
+  | { status: 'inconclusive'; reason: string };
+
+/** How far back of the intent timestamp to search, covering clock skew. */
+const RECONCILE_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+/** Page ceiling for a reconciliation walk. Exceeding it yields `inconclusive`. */
+const RECONCILE_MAX_PAGES = 50;
+
 export interface SubmitResult {
   placed: boolean;
   order?: unknown;
@@ -257,6 +274,56 @@ export class Executor {
       },
     );
     return results;
+  }
+
+  /**
+   * Look up one order by its `client_order_id`, conclusively.
+   *
+   * Reconciliation turns this answer into a decision about real money, so
+   * "I did not see it" and "it does not exist" must not collapse into the same
+   * result. A truncated page walk returns `inconclusive`, never `not_found`:
+   * treating an unfinished search as a negative would abandon an intent whose
+   * order actually exists, and the strategy would then re-place it under a new
+   * `client_order_id` and double-fill.
+   *
+   * The search is bounded by the intent's own creation time, which is what
+   * makes it terminate conclusively — Robinhood has no `client_order_id`
+   * filter, so an unbounded walk is the entire order history.
+   */
+  async findOrderByClientOrderId(
+    clientOrderId: string,
+    createdAtMs: number,
+  ): Promise<OrderLookup> {
+    // Widen the window backwards: the intent row is written before the request
+    // is signed, and Robinhood stamps `created_at` on its own clock.
+    const since = new Date(createdAtMs - RECONCILE_CLOCK_SKEW_MS).toISOString();
+
+    const { results, truncated } = await this.client.getAllPages<Record<string, unknown>>(
+      this.endpoints.orders,
+      {
+        query: {
+          created_at_start: since,
+          ...(requiresAccountNumber(this.credentials.apiVersion)
+            ? { account_number: await this.accountNumber() }
+            : {}),
+        },
+      },
+      RECONCILE_MAX_PAGES,
+    );
+
+    const match = results.find((order) => order.client_order_id === clientOrderId);
+    if (match) return { status: 'found', order: match };
+
+    if (truncated) {
+      return {
+        status: 'inconclusive',
+        reason:
+          `Order history since ${since} exceeded ${RECONCILE_MAX_PAGES} pages without finding ` +
+          `client_order_id ${clientOrderId}. Treating this as unresolved rather than absent.`,
+      };
+    }
+
+    return { status: 'not_found' };
   }
 
   async tradingPair(symbol: string): Promise<Record<string, unknown> | null> {

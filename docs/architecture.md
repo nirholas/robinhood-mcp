@@ -124,13 +124,24 @@ Instead, every order follows a three-phase write:
 3. **Settle.** Record the response and mark the intent `submitted` (or `failed`).
 
 On startup, the supervisor runs **reconciliation**: for every intent still `pending`, it
-queries the orders endpoint and matches by `client_order_id`.
+asks Robinhood whether an order with that `client_order_id` exists. The answer has
+**three** states, and keeping them distinct is the whole point:
 
-- Found upstream → the order was placed before the crash. Mark `submitted`, adopt the
-  upstream order, do not resubmit.
-- Not found → the crash happened before Robinhood saw it. Safe to resubmit, and it
-  resubmits with the *same* `client_order_id`, so a duplicate that was in flight is
-  rejected by Robinhood rather than filled twice.
+- **Found** → the order was placed before the crash. Mark `submitted`, adopt the
+  upstream order, never resubmit.
+- **Conclusively not found** → Robinhood never saw it. Mark `abandoned`. The strategy
+  decides on its next advance whether the slice is still wanted, since the market has
+  moved since the crash.
+- **Inconclusive** → the search did not complete (page ceiling hit, or the request
+  errored). The intent stays `pending` and is retried next reconcile.
+
+The third state is not defensive padding. Robinhood has **no `client_order_id` query
+filter**, so the lookup is a bounded walk of order history. Collapsing "I did not finish
+looking" into "it does not exist" would abandon an intent whose order is live, and the
+strategy would then re-place that slice under a fresh `client_order_id` — a double fill
+with real money. `Executor.findOrderByClientOrderId` bounds the walk by the intent's own
+`created_at` so it terminates conclusively in the normal case, and reports
+`inconclusive` rather than guessing when it cannot.
 
 Reconciliation runs before any strategy advances. A job never executes against stale
 state.

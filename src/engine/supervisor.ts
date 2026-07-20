@@ -84,62 +84,76 @@ export class Supervisor {
    * Not found means Robinhood never saw it, so it is safe to retry later with
    * the same `client_order_id`.
    */
-  async reconcile(): Promise<{ adopted: number; released: number }> {
+  async reconcile(): Promise<{ adopted: number; released: number; unresolved: number }> {
     const pending = this.store.pendingIntents();
-    if (!pending.length) return { adopted: 0, released: 0 };
+    if (!pending.length) return { adopted: 0, released: 0, unresolved: 0 };
 
     this.log(`reconciling ${pending.length} unsettled order intent(s)`);
     let adopted = 0;
     let released = 0;
+    let unresolved = 0;
 
     for (const intent of pending) {
       try {
-        const upstream = await this.findUpstreamOrder(intent.clientOrderId);
+        const lookup = await this.executor.findOrderByClientOrderId(
+          intent.clientOrderId,
+          intent.createdAt,
+        );
 
-        if (upstream) {
+        if (lookup.status === 'found') {
           this.store.settleIntent(intent.clientOrderId, {
             status: 'submitted',
-            orderId: typeof upstream.id === 'string' ? upstream.id : null,
+            orderId: typeof lookup.order.id === 'string' ? lookup.order.id : null,
           });
           if (intent.jobId) {
             this.store.appendEvent(intent.jobId, 'intent_adopted', {
               clientOrderId: intent.clientOrderId,
-              orderId: upstream.id ?? null,
+              orderId: lookup.order.id ?? null,
             });
           }
           adopted++;
-        } else {
-          // Robinhood never saw it. Mark abandoned rather than auto-resubmitting:
-          // the strategy decides on its next advance whether the slice is still
-          // wanted, since the market has moved since the crash.
-          this.store.settleIntent(intent.clientOrderId, {
-            status: 'abandoned',
-            error: 'Not found upstream during reconciliation; never reached Robinhood.',
-          });
+          continue;
+        }
+
+        if (lookup.status === 'inconclusive') {
+          // The search did not finish. Absence was not proven, so the intent
+          // stays pending and is retried on the next reconcile. Abandoning here
+          // would let the strategy re-place the order under a fresh
+          // client_order_id and fill the same slice twice.
+          unresolved++;
+          this.log(`unresolved ${intent.clientOrderId}: ${lookup.reason}`);
           if (intent.jobId) {
-            this.store.appendEvent(intent.jobId, 'intent_abandoned', {
+            this.store.appendEvent(intent.jobId, 'intent_unresolved', {
               clientOrderId: intent.clientOrderId,
+              reason: lookup.reason,
             });
           }
-          released++;
+          continue;
         }
+
+        // Conclusively absent: Robinhood never saw it. Mark abandoned rather
+        // than auto-resubmitting — the strategy decides on its next advance
+        // whether the slice is still wanted, since the market has moved.
+        this.store.settleIntent(intent.clientOrderId, {
+          status: 'abandoned',
+          error: 'Not found upstream during reconciliation; never reached Robinhood.',
+        });
+        if (intent.jobId) {
+          this.store.appendEvent(intent.jobId, 'intent_abandoned', {
+            clientOrderId: intent.clientOrderId,
+          });
+        }
+        released++;
       } catch (error) {
-        // Leave it pending: an inconclusive check must not decide either way.
+        // An errored check is also inconclusive: leave it pending.
+        unresolved++;
         this.log(
           `could not reconcile ${intent.clientOrderId}: ${error instanceof Error ? error.message : error}`,
         );
       }
     }
 
-    return { adopted, released };
-  }
-
-  private async findUpstreamOrder(
-    clientOrderId: string,
-  ): Promise<Record<string, unknown> | null> {
-    const orders = await this.executor.orders({ client_order_id: clientOrderId });
-    const match = orders.find((order) => order.client_order_id === clientOrderId);
-    return match ?? null;
+    return { adopted, released, unresolved };
   }
 
   /** Advance every due job once. Safe to call concurrently; overlaps are skipped. */
