@@ -90,6 +90,18 @@ export interface CreateJobInput {
 export class JobStore {
   private readonly db: DatabaseSync;
 
+  /**
+   * The underlying database, for sibling subsystems that must share this file.
+   *
+   * The kill switch lives next to the jobs it halts on purpose: one file, one
+   * lock, and no way for the switch and the job rows to disagree about which
+   * database is authoritative. Exposed deliberately rather than reached for by
+   * casting past `private`, so the coupling is visible.
+   */
+  get database(): DatabaseSync {
+    return this.db;
+  }
+
   constructor(path = ':memory:') {
     this.db = new DatabaseSync(path);
     // WAL keeps a reader (an agent listing jobs) from blocking the supervisor.

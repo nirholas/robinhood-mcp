@@ -20,6 +20,7 @@ import { registerTradingTools } from '../register-trading.js';
 import { registerOrderTools } from './orders.js';
 import { registerAlgoTools } from './algo.js';
 import { registerPortfolioTools } from './portfolio.js';
+import { registerRiskTools } from './risk.js';
 import { registerDevTools } from './devtools.js';
 
 /**
@@ -101,12 +102,32 @@ const devModule: ToolModule = {
   },
 };
 
+/**
+ * Limits, exposure, and the emergency stop.
+ *
+ * Mutating because engaging the kill switch pauses running jobs. The halt
+ * itself is enforced in the Executor, not here, so it also binds the daemon,
+ * which loads no tool modules at all.
+ */
+const riskModule: ToolModule = {
+  name: 'risk',
+  description:
+    'Exposure, concentration, drawdown, pre-trade checks, risk-based sizing, and an enforced kill switch.',
+  enabledByDefault: true,
+  mutating: true,
+  register(context) {
+    const { executor, engine } = requireExecution(context);
+    registerRiskTools(context.server, executor, engine.store);
+  },
+};
+
 /** Every module the toolkit knows about, in catalogue order. */
 export const ALL_MODULES: ToolModule[] = [
   marketModule,
   ordersModule,
   algoModule,
   portfolioModule,
+  riskModule,
   devModule,
 ];
 

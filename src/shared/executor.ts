@@ -11,6 +11,7 @@ import type { RobinhoodCryptoClient } from './client.js';
 import { endpointsFor, requiresAccountNumber } from './endpoints.js';
 import type { Credentials } from './config.js';
 import { PolicyError, SpendLedger, type ExecutionPolicy } from './execution-mode.js';
+import type { KillSwitch } from './kill-switch.js';
 
 export type OrderSide = 'buy' | 'sell';
 export type OrderType = 'market' | 'limit' | 'stop_loss' | 'stop_limit';
@@ -68,7 +69,28 @@ export class Executor {
     private readonly credentials: Credentials,
     private readonly policy: ExecutionPolicy,
     private readonly ledger: SpendLedger,
+    /**
+     * The emergency stop, when one is configured.
+     *
+     * Checked here rather than in a tool module because the daemon builds its
+     * own Executor and loads no modules: a halt enforced anywhere else would
+     * leave the one unattended process in the system still trading.
+     */
+    private readonly killSwitch?: KillSwitch,
   ) {}
+
+  /**
+   * Refuse everything while the kill switch is engaged.
+   *
+   * @throws {PolicyError} So a halt surfaces through the same path as a
+   *   breached cap: `toolError` renders it verbatim, and strategies already
+   *   treat it as a reason to stop rather than a transient failure to retry.
+   */
+  private assertNotHalted(): void {
+    if (!this.killSwitch) return;
+    const state = this.killSwitch.read();
+    if (state.engaged) throw new PolicyError(this.killSwitch.blockMessage(state));
+  }
 
   get executionPolicy(): ExecutionPolicy {
     return this.policy;
@@ -182,6 +204,8 @@ export class Executor {
    *   value cannot be determined is rejected, never assumed cheap.
    */
   assertAllowed(priced: PricedOrder): void {
+    this.assertNotHalted();
+
     const { symbol, side } = priced.request;
 
     if (this.policy.symbolAllowlist && !this.policy.symbolAllowlist.includes(symbol)) {
@@ -221,6 +245,8 @@ export class Executor {
    *   `autonomous` mode, where orders always send.
    */
   async submitOrder(request: OrderRequest, confirm = false): Promise<SubmitResult> {
+    this.assertNotHalted();
+
     const priced = await this.price(request);
     this.assertAllowed(priced);
 

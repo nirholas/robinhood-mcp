@@ -20,6 +20,7 @@ import { RobinhoodCryptoClient } from './shared/client.js';
 import { loadCredentials, jobDatabasePath } from './shared/config.js';
 import { assertTradingEnabled, loadExecutionPolicy, SpendLedger } from './shared/execution-mode.js';
 import { Executor } from './shared/executor.js';
+import { KillSwitch } from './shared/kill-switch.js';
 import { JobStore } from './engine/store.js';
 import { Supervisor } from './engine/supervisor.js';
 import { ALL_STRATEGIES } from './engine/strategies/index.js';
@@ -38,12 +39,21 @@ export async function startDaemon(): Promise<DaemonHandle> {
 
   const policy = loadExecutionPolicy();
   const client = new RobinhoodCryptoClient(credentials);
-  const executor = new Executor(client, credentials, policy, new SpendLedger(policy));
 
   const dbPath = jobDatabasePath();
   ensureParentDirectory(dbPath);
 
   const store = new JobStore(dbPath);
+
+  // The kill switch matters most here. This process runs unattended, so an
+  // operator throwing the switch from an MCP session must stop it mid-job.
+  const executor = new Executor(
+    client,
+    credentials,
+    policy,
+    new SpendLedger(policy),
+    new KillSwitch(store.database),
+  );
   const supervisor = new Supervisor(store, executor, ALL_STRATEGIES, {
     intervalMs: Number(process.env.ROBINHOOD_MCP_TICK_MS ?? 5_000),
   });

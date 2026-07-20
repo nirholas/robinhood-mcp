@@ -16,6 +16,7 @@ import { RobinhoodCryptoClient } from './shared/client.js';
 import { jobDatabasePath, loadCredentials } from './shared/config.js';
 import { assertTradingEnabled, loadExecutionPolicy, SpendLedger } from './shared/execution-mode.js';
 import { Executor } from './shared/executor.js';
+import { KillSwitch } from './shared/kill-switch.js';
 import { JobStore } from './engine/store.js';
 import { Supervisor } from './engine/supervisor.js';
 import { ALL_STRATEGIES } from './engine/strategies/index.js';
@@ -29,16 +30,24 @@ export function createTradingServer(): McpServer {
 
   const policy = loadExecutionPolicy();
   const client = new RobinhoodCryptoClient(credentials);
-  const executor = new Executor(client, credentials, policy, new SpendLedger(policy));
-
-  const server = new McpServer({ name: 'robinhood-mcp-trading', version: VERSION });
 
   // Durable execution jobs. The same database backs the standalone daemon, so
   // a job started here keeps running under `robinhood-mcp-daemon` after this
-  // conversation ends.
+  // conversation ends, and both read the same kill switch.
   const dbPath = jobDatabasePath();
   mkdirSync(dirname(dbPath), { recursive: true });
   const store = new JobStore(dbPath);
+
+  const executor = new Executor(
+    client,
+    credentials,
+    policy,
+    new SpendLedger(policy),
+    new KillSwitch(store.database),
+  );
+
+  const server = new McpServer({ name: 'robinhood-mcp-trading', version: VERSION });
+
   const supervisor = new Supervisor(store, executor, ALL_STRATEGIES);
 
   let supervisorRunning = false;
