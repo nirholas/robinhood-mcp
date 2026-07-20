@@ -1,0 +1,67 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.nirholas/robinhood-mcp",
+  "title": "Robinhood Crypto",
+  "description": "Official Robinhood Crypto Trading API for AI agents: quotes, holdings, account, and order history read-only, plus opt-in order placement behind a spend cap and confirm gate.",
+  "version": "0.1.0",
+  "websiteUrl": "https://github.com/nirholas/robinhood-mcp#readme",
+  "repository": {
+    "url": "https://github.com/nirholas/robinhood-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "robinhood-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ROBINHOOD_CRYPTO_API_KEY",
+          "description": "API key from your Robinhood crypto account settings (robinhood.com/account/crypto, web classic only).",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "ROBINHOOD_CRYPTO_PRIVATE_KEY",
+          "description": "Base64-encoded 32-byte Ed25519 private seed whose public key is registered with Robinhood. Generate one with `npx robinhood-keygen`.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "ROBINHOOD_CRYPTO_API_VERSION",
+          "description": "API version: \"v1\" (default) or \"v2\". v2 adds fee-tier data to accounts and orders.",
+          "isRequired": false,
+          "isSecret": false,
+          "default": "v1"
+        },
+        {
+          "name": "ROBINHOOD_CRYPTO_BASE_URL",
+          "description": "Override the API host. Defaults to https://trading.robinhood.com.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "productName": "robinhood-mcp (data server)",
+      "tradingServer": {
+        "note": "A second, explicitly opt-in server ships in the same package as bin `robinhood-mcp-trading`. MCP clients do not launch it by default. It requires ROBINHOOD_CRYPTO_ENABLE_TRADING=1 and enforces a per-order USD cap (ROBINHOOD_CRYPTO_MAX_ORDER_USD, default 100), an optional symbol allowlist, and a per-call confirm gate. Robinhood publishes no sandbox: every order is real money.",
+        "docs": "https://github.com/nirholas/robinhood-mcp#safety"
+      },
+      "notRobinhoodChain": "This server targets the Robinhood brokerage Crypto Trading API (trading.robinhood.com). For Robinhood Chain (L2, chain ID 4663), see io.github.nirholas/hood-mcp.",
+      "categories": [
+        "finance",
+        "trading",
+        "market-data",
+        "crypto"
+      ]
+    }
+  }
+}

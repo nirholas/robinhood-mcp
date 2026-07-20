@@ -1,1 +1,183 @@
 # robinhood-mcp
+
+Model Context Protocol servers for the **official Robinhood Crypto Trading API** — the credentialed brokerage API at `trading.robinhood.com`, documented at [docs.robinhood.com/crypto/trading](https://docs.robinhood.com/crypto/trading/).
+
+Two servers ship in this package:
+
+| Server | Binary | What it can do |
+| --- | --- | --- |
+| Data | `robinhood-mcp` | Read quotes, holdings, account, order history. Cannot move money. |
+| Trading | `robinhood-mcp-trading` | Everything above, plus `place_order` and `cancel_order`, behind an opt-in flag, a spend cap, and a per-call confirm gate. |
+
+> **This is not Robinhood Chain.** For the L2 (chain ID 4663) — Stock Tokens, USDG, Uniswap v3 swaps — see [`robinhood-chain-mcp`](https://github.com/nirholas/robinhood-chain-mcp). Different product, different credentials, different money. Mixing them up is the most common mistake in this space.
+
+---
+
+## Quick start (read-only)
+
+```bash
+npx robinhood-keygen        # generate an Ed25519 keypair
+```
+
+Register the **public** key at [robinhood.com/account/crypto](https://robinhood.com/account/crypto) (web classic only), and Robinhood issues you an API key. Then:
+
+```json
+{
+  "mcpServers": {
+    "robinhood-crypto": {
+      "command": "npx",
+      "args": ["-y", "robinhood-mcp"],
+      "env": {
+        "ROBINHOOD_CRYPTO_API_KEY": "rh-api-...",
+        "ROBINHOOD_CRYPTO_PRIVATE_KEY": "your-base64-seed"
+      }
+    }
+  }
+}
+```
+
+Ask your assistant: *"What's my Robinhood crypto buying power, and what's BTC trading at?"*
+
+---
+
+## Tools
+
+### Read-only (both servers)
+
+| Tool | Purpose |
+| --- | --- |
+| `get_account` | Account number, status, buying power. Fee-tier status on v2. |
+| `get_holdings` | Holdings with total and tradable quantity. |
+| `get_best_bid_ask` | Best bid/ask for one or more pairs, including the spread-inclusive execution prices. |
+| `get_estimated_price` | Depth-aware execution estimate for a given size. |
+| `get_trading_pairs` | Supported pairs with min/max order size and price/quantity increments. |
+| `get_orders` | Order history, filterable by symbol, side, type, state, and time. |
+| `get_order` | One order by id, including its fills. |
+| `get_connection_info` | Configured API version and the **public** key derived from your private key. Never returns secrets. |
+
+### Trading (trading server only)
+
+| Tool | Purpose |
+| --- | --- |
+| `place_order` | Market, limit, stop-loss, and stop-limit orders. Previews by default. |
+| `cancel_order` | Best-effort cancellation of an open order. |
+
+---
+
+## Safety
+
+**Robinhood publishes no sandbox.** Every order this server can place is real money in a real brokerage account. Four independent controls sit in front of that, all enforced in code rather than in a prompt:
+
+1. **Separate binary.** The data server registers no tool that can trade. Attaching it to a general-purpose assistant cannot result in an order.
+2. **Explicit opt-in.** The trading server refuses to start unless `ROBINHOOD_CRYPTO_ENABLE_TRADING=1`.
+3. **Confirm gate.** `place_order` defaults to `confirm: false`, returning the exact request it *would* send plus a priced estimate. Nothing is placed until a second call sets `confirm: true`.
+4. **Spend cap.** Every order is priced before submission and rejected above `ROBINHOOD_CRYPTO_MAX_ORDER_USD` (default `$100`).
+
+The cap **fails closed**: if an order's USD value cannot be determined up front, it is rejected rather than assumed cheap. Writes are never retried, since retrying an ambiguous failure can double-fill.
+
+```json
+{
+  "mcpServers": {
+    "robinhood-crypto-trading": {
+      "command": "npx",
+      "args": ["-y", "robinhood-mcp-trading"],
+      "env": {
+        "ROBINHOOD_CRYPTO_API_KEY": "rh-api-...",
+        "ROBINHOOD_CRYPTO_PRIVATE_KEY": "your-base64-seed",
+        "ROBINHOOD_CRYPTO_ENABLE_TRADING": "1",
+        "ROBINHOOD_CRYPTO_MAX_ORDER_USD": "50",
+        "ROBINHOOD_CRYPTO_SYMBOL_ALLOWLIST": "BTC-USD,ETH-USD"
+      }
+    }
+  }
+}
+```
+
+Scope the API key itself too. Robinhood lets you pick permissions per credential — if you only want reads, do not grant order placement, and the key cannot trade no matter what software holds it. IP allowlisting is also available and worth using.
+
+---
+
+## Configuration
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `ROBINHOOD_CRYPTO_API_KEY` | yes | — | API key from your crypto account settings. |
+| `ROBINHOOD_CRYPTO_PRIVATE_KEY` | yes | — | Base64 **32-byte Ed25519 seed**. |
+| `ROBINHOOD_CRYPTO_API_VERSION` | no | `v1` | `v1` or `v2`. v2 adds fee tiers. |
+| `ROBINHOOD_CRYPTO_BASE_URL` | no | `https://trading.robinhood.com` | Override the API host. |
+| `ROBINHOOD_CRYPTO_ENABLE_TRADING` | trading only | `0` | Must be `1` to start the trading server. |
+| `ROBINHOOD_CRYPTO_MAX_ORDER_USD` | no | `100` | Hard ceiling per order. |
+| `ROBINHOOD_CRYPTO_SYMBOL_ALLOWLIST` | no | unset | Comma-separated pairs; when set, only these may trade. |
+| `ROBINHOOD_CRYPTO_BUY_ONLY` | no | `0` | Set `1` to reject sell orders. |
+
+### v1 vs v2
+
+v2 adds fee-tier data but is not a drop-in replacement. Its `holdings`, `orders`, and order-placement endpoints require an `account_number` query parameter (resolved automatically here), and `estimated_price` moves from `/marketdata/` to `/trading/`. v2 also reports order state `pending` where v1 reports `partially_filled`. Default is v1; set `ROBINHOOD_CRYPTO_API_VERSION=v2` if you want fee data.
+
+---
+
+## Library use
+
+The signed client works without MCP:
+
+```javascript
+import { RobinhoodCryptoClient, loadCredentials } from 'robinhood-mcp';
+
+const client = new RobinhoodCryptoClient(loadCredentials());
+const quote = await client.get('/api/v1/crypto/marketdata/best_bid_ask/', {
+  query: { symbol: ['BTC-USD'] },
+});
+console.log(quote);
+```
+
+Responses are returned exactly as Robinhood sends them. Field names are deliberately **not** remapped: the published schemas and the community clients disagree in places, and a wrong mapping corrupts data silently while a pass-through stays correct even as the upstream shape changes.
+
+---
+
+## Authentication, and two things that will bite you
+
+Every request carries `x-api-key`, `x-timestamp`, and `x-signature`, where the signature is a detached Ed25519 signature over:
+
+```
+message = api_key + timestamp + path + method + body
+```
+
+concatenated with no separators. Three details matter:
+
+- **The private key is a 32-byte seed**, not a 64-byte expanded keypair and not PKCS#8. Several Ed25519 libraries export `seed‖publicKey`; pasting that gives 64 bytes and fails. This package detects that case by name.
+- **Timestamps are Unix seconds and expire after 30 seconds.** `Date.now()` returns milliseconds; using it directly fails every request. Keep the system clock synced.
+- **The path includes the query string and the trailing slash.** Both are signed. Serialize the body once, sign those exact bytes, send those exact bytes — re-serializing changes key order or whitespace and produces a well-formed request with an invalid signature.
+
+### Robinhood's published conformance vector is wrong
+
+The docs publish a worked example and invite you to check your signature against it. **That vector does not correspond to the JSON body a real client sends.** It was generated by signing a Python `dict` repr — single quotes, spaces after colons, and a different key order than the accompanying table shows:
+
+```
+{'client_order_id': '...', 'side': 'buy', 'symbol': 'BTC-USD', 'type': 'market', ...}
+```
+
+Signing the actual JSON body, which is what every working client and Robinhood's own sample code does at runtime, will *not* reproduce the published signature. Anyone using that vector as a conformance check will "fix" a correct implementation into a broken one.
+
+Both facts are pinned in [`tests/signer.test.ts`](tests/signer.test.ts) so the quirk stays documented. The signer is verified the sound way instead: Robinhood publishes both halves of an example keypair, and this implementation derives their exact public key from their private key, then round-trips a signature through independent verification.
+
+---
+
+## Development
+
+```bash
+npm install
+npm test          # unit tests, no credentials or network needed
+npm run typecheck
+npm run build
+npm run test:live # hits the real API; requires credentials
+```
+
+`npm test` never touches the network. The live suite is opt-in and read-only — it places no orders.
+
+## Reference
+
+The upstream OpenAPI document is vendored at [`docs/openapi-extracted.json`](docs/openapi-extracted.json). Robinhood serves its docs as a client-rendered SPA with no published spec URL; this copy was extracted from the page bundle so the endpoint list and schemas can be diffed when they change.
+
+## License
+
+See [LICENSE](LICENSE).
