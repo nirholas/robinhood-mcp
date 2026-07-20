@@ -19,6 +19,7 @@ import { registerDataTools } from '../register-data.js';
 import { registerTradingTools } from '../register-trading.js';
 import { registerOrderTools } from './orders.js';
 import { registerAlgoTools } from './algo.js';
+import { registerPortfolioTools } from './portfolio.js';
 
 /**
  * Market data, account state, and order history. Read-only, so it is the one
@@ -67,8 +68,29 @@ const algoModule: ToolModule = {
   },
 };
 
+/**
+ * Numbers Robinhood does not report: what you paid, what you realized, which
+ * lots are open, and how large a position your stop actually justifies. All of
+ * it is derived from filled order history, so the module is read-only.
+ */
+const portfolioModule: ToolModule = {
+  name: 'portfolio',
+  description:
+    'Derived analytics: FIFO cost basis, realized P&L and tax lots, allocation, risk-based position sizing, slippage, volatility.',
+  enabledByDefault: true,
+  mutating: false,
+  register(context) {
+    registerPortfolioTools(context.server, context.client, context.credentials);
+  },
+};
+
 /** Every module the toolkit knows about, in catalogue order. */
-export const ALL_MODULES: ToolModule[] = [marketModule, ordersModule, algoModule];
+export const ALL_MODULES: ToolModule[] = [
+  marketModule,
+  ordersModule,
+  algoModule,
+  portfolioModule,
+];
 
 export interface ApplyModulesOptions {
   /** False on the read-only server, which cannot host order-placing tools. */

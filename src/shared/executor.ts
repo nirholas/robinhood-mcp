@@ -99,17 +99,28 @@ export class Executor {
   }
 
   /**
+   * The raw quote row for a symbol, unmapped.
+   *
+   * Callers that need both sides of the book (slippage and spread analysis)
+   * read this rather than calling `referencePrice` twice, which would issue two
+   * requests against a rate limit of 100/minute and could straddle a tick.
+   */
+  async rawQuote(symbol: string): Promise<Record<string, unknown> | null> {
+    const quote = await this.client.get<{ results?: Array<Record<string, unknown>> }>(
+      this.endpoints.bestBidAsk,
+      { query: { symbol: [symbol.toUpperCase()] } },
+    );
+    return quote?.results?.[0] ?? null;
+  }
+
+  /**
    * Best available execution-side price for a symbol.
    *
    * Uses the spread-inclusive price when Robinhood provides it, since that is
    * what a market order actually pays, not the mid.
    */
   async referencePrice(symbol: string, side: OrderSide): Promise<number | null> {
-    const quote = await this.client.get<{ results?: Array<Record<string, unknown>> }>(
-      this.endpoints.bestBidAsk,
-      { query: { symbol: [symbol] } },
-    );
-    const row = quote?.results?.[0];
+    const row = await this.rawQuote(symbol);
     if (!row) return null;
 
     const keys =
