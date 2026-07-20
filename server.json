@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.nirholas/robinhood-mcp",
   "title": "Robinhood Crypto",
-  "description": "Official Robinhood Crypto Trading API for AI agents: quotes, holdings, account, and order history read-only, plus opt-in order placement behind a spend cap and confirm gate.",
+  "description": "Robinhood Crypto Trading API for AI agents: quotes, holdings, orders read-only; opt-in trading.",
   "version": "0.1.0",
   "websiteUrl": "https://github.com/nirholas/robinhood-mcp#readme",
   "repository": {
