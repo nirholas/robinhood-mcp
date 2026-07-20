@@ -20,6 +20,7 @@ import { registerTradingTools } from '../register-trading.js';
 import { registerOrderTools } from './orders.js';
 import { registerAlgoTools } from './algo.js';
 import { registerPortfolioTools } from './portfolio.js';
+import { registerDevTools } from './devtools.js';
 
 /**
  * Market data, account state, and order history. Read-only, so it is the one
@@ -84,12 +85,29 @@ const portfolioModule: ToolModule = {
   },
 };
 
+/**
+ * Integration diagnostics. Every way this API rejects a request surfaces as an
+ * opaque 401, so these tools exist to name the actual cause: key format, clock
+ * skew, a signature over the wrong bytes, a missing scope.
+ */
+const devModule: ToolModule = {
+  name: 'dev',
+  description:
+    'Builder tools: connection diagnostics, signature explanation, keypair generation and verification, client codegen, environment check.',
+  enabledByDefault: false,
+  mutating: false,
+  register(context) {
+    registerDevTools(context.server, context.client, context.credentials);
+  },
+};
+
 /** Every module the toolkit knows about, in catalogue order. */
 export const ALL_MODULES: ToolModule[] = [
   marketModule,
   ordersModule,
   algoModule,
   portfolioModule,
+  devModule,
 ];
 
 export interface ApplyModulesOptions {
