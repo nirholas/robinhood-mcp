@@ -110,6 +110,12 @@ Set the caps to numbers you are comfortable losing. They are the only thing stan
 
 You can run both entries at once. The data server is safe to leave attached permanently; add the trading server when you intend to trade.
 
+### If you have not set credentials yet
+
+The data server still starts. Rather than exiting (which most MCP clients surface only as an opaque "server failed to start"), it comes up with a single `get_setup_status` tool that reports what is missing and how to fix it. If that is the only tool you see, credentials are not configured: set `ROBINHOOD_CRYPTO_API_KEY` and `ROBINHOOD_CRYPTO_PRIVATE_KEY`, then restart the server and the full tool set appears.
+
+The trading server is deliberately stricter and refuses to start without `ROBINHOOD_CRYPTO_ENABLE_TRADING=1`, so it can never be launched by accident.
+
 ---
 
 ## Modules
