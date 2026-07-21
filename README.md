@@ -8,6 +8,25 @@ Robinhood's crypto API exposes four order types and nothing else: `market`, `lim
 
 ---
 
+## The signing bench — [nirholas.github.io/robinhood-mcp](https://nirholas.github.io/robinhood-mcp/)
+
+The project site is an interactive **Ed25519 signing bench**. You assemble a real Robinhood trading request and produce a genuine signature in your own browser — the math runs client-side on Robinhood's published example key, nothing is sent anywhere — then watch it disprove Robinhood's own documentation: their published test vector verifies against a Python `dict` repr, not the JSON body every client actually sends. It is a single self-contained page in [`docs/`](docs/), so it deploys anywhere static.
+
+Deploy your own copy in one click:
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/nirholas/robinhood-mcp)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/nirholas/robinhood-mcp)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/nirholas/robinhood-mcp&project-name=robinhood-mcp&output-directory=docs)
+
+| Target | How |
+| --- | --- |
+| **GitHub Pages** | Settings → Pages → Source: `main` / `/docs`. Serves at `nirholas.github.io/robinhood-mcp/`. No build step. |
+| **Cloudflare Pages** | The button above, or `wrangler pages deploy docs`. Config in [`wrangler.toml`](wrangler.toml). |
+| **Google Cloud** | `gcloud storage cp -r docs/* gs://<bucket>/` behind an HTTPS load balancer, or Cloud Run with any static server rooted at `docs/`. |
+| **Netlify / Vercel** | The buttons above. Publish directory is `docs/` ([`netlify.toml`](netlify.toml), [`vercel.json`](vercel.json)). |
+
+---
+
 ## Safety
 
 **Robinhood publishes no sandbox.** There is no paper account, no test environment, no dry-run host. Every order this package can place is real money in a real brokerage account, and there is no way to rehearse. Read this section before you set `ROBINHOOD_CRYPTO_ENABLE_TRADING=1`.

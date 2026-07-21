@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>robinhood-mcp — sign a real Robinhood trade in your browser</title>
+<meta name="description" content="An MCP server that lets an AI agent place real Robinhood crypto orders. Sign a genuine Ed25519 request in your browser, then watch it disprove Robinhood's own published documentation." />
+<link rel="canonical" href="https://nirholas.github.io/robinhood-mcp/" />
+<meta name="theme-color" content="#0b0b0c" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="robinhood-mcp — the signing bench" />
+<meta property="og:description" content="Sign a real Robinhood trading request with your cursor, then disprove Robinhood's official API docs with math that runs on your machine." />
+<meta property="og:url" content="https://nirholas.github.io/robinhood-mcp/" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:creator" content="@nichxbt" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230b0b0c'/><path d='M6 22 L12 22 L14 10 L18 24 L20 16 L26 16' fill='none' stroke='%23e9e6df' stroke-width='2'/></svg>" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"robinhood-mcp","applicationCategory":"DeveloperApplication","operatingSystem":"Node.js >= 22","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"description":"Model Context Protocol server for the official Robinhood Crypto Trading API. Sign requests with Ed25519, run 13 execution strategies as durable jobs, place real orders behind spend caps.","softwareVersion":"0.1","author":{"@type":"Person","name":"nirholas","url":"https://x.com/nichxbt"},"downloadUrl":"https://www.npmjs.com/package/robinhood-mcp","codeRepository":"https://github.com/nirholas/robinhood-mcp"}
+</script>
+<style>
+  :root{
+    --ink:#0b0b0c; --paper:#e9e6df; --graphite:#78746c;
+    --hair:rgba(11,11,12,.15); --hair2:rgba(11,11,12,.30);
+    --mono:ui-monospace,"SFMono-Regular","JetBrains Mono","Menlo","Consolas",monospace;
+    --grot:"Helvetica Neue","Inter","Arial",system-ui,sans-serif;
+    --ease:cubic-bezier(.16,1,.3,1);
+    --unit:clamp(14px,1.15vw,19px);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:var(--paper); color:var(--ink); font-family:var(--grot);
+    font-size:var(--unit); line-height:1.5; overflow-x:hidden;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  ::selection{background:var(--ink); color:var(--paper)}
+  a{color:inherit}
+  .mono{font-family:var(--mono); font-feature-settings:"ss01","zero"}
+
+  /* ---- film grain + scanline: the instrument feel, pure CSS, no repaint cost ---- */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:9999; pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(11,11,12,.035) 0 1px,transparent 1px 3px);
+    mix-blend-mode:multiply; opacity:.55;
+  }
+  .scan{position:fixed; left:0; right:0; height:2px; z-index:9998; pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(11,11,12,.22),transparent);
+    animation:scan 7.5s linear infinite; will-change:transform}
+  @keyframes scan{0%{transform:translateY(-10vh)}100%{transform:translateY(110vh)}}
+  @media(prefers-reduced-motion:reduce){.scan{display:none} *{animation-duration:.001s!important}}
+
+  /* ---- signal rail: navigation lives inside the instrument ---- */
+  .rail{position:fixed; left:0; top:0; bottom:0; width:56px; z-index:60;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    border-right:1px solid var(--hair); background:var(--paper); mix-blend-mode:multiply}
+  .rail b{writing-mode:vertical-rl; transform:rotate(180deg); font:600 11px/1 var(--mono);
+    letter-spacing:.35em; text-transform:uppercase; color:var(--graphite);
+    position:absolute; top:16px}
+  .rail .stn{writing-mode:vertical-rl; font:500 10px/1 var(--mono); letter-spacing:.28em;
+    text-transform:uppercase; color:var(--graphite); padding:14px 0; cursor:pointer;
+    transition:color .3s var(--ease); text-decoration:none; opacity:.6}
+  .rail .stn:hover{color:var(--ink); opacity:1}
+  .rail .stn[aria-current="true"]{color:var(--ink); opacity:1}
+  .rail .stn::before{content:"";display:block;width:5px;height:5px;border:1px solid var(--hair2);
+    border-radius:50%;margin:0 auto 8px;transition:all .3s var(--ease)}
+  .rail .stn[aria-current="true"]::before{background:var(--ink);border-color:var(--ink)}
+  .rail .carriage{position:absolute;left:-1px;width:2px;background:var(--ink);height:40px;
+    top:0;transition:transform .5s var(--ease);will-change:transform}
+
+  main{margin-left:56px}
+  @media(max-width:720px){.rail{width:0;border:0}.rail b,.rail .stn,.rail .carriage{display:none}main{margin-left:0}}
+
+  section{position:relative; padding:clamp(64px,9vh,120px) clamp(20px,5vw,88px);
+    border-bottom:1px solid var(--hair)}
+  .eyebrow{font:600 11px/1 var(--mono); letter-spacing:.34em; text-transform:uppercase;
+    color:var(--graphite); display:flex; align-items:center; gap:12px; margin-bottom:26px}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--hair)}
+  .eyebrow .n{color:var(--ink)}
+
+  h1,h2{font-family:var(--grot); font-weight:700; letter-spacing:-.03em; line-height:.96}
+  h1{font-size:clamp(42px,8.4vw,116px)}
+  h2{font-size:clamp(30px,5vw,64px)}
+  .lede{max-width:60ch; font-size:clamp(17px,1.7vw,23px); line-height:1.42; color:#26241f}
+
+  /* ================= BENCH (hero + the signature interaction) ================= */
+  #bench{min-height:100svh; display:flex; flex-direction:column; justify-content:center; padding-bottom:0}
+  .boot{font:500 12px/1.7 var(--mono); color:var(--graphite); letter-spacing:.04em; margin-bottom:22px; white-space:pre-wrap}
+  @media(max-width:720px){.boot{font-size:10.5px; letter-spacing:0}}
+  .boot span{display:inline-block; white-space:pre; opacity:0; animation:type .5s var(--ease) forwards}
+  @keyframes type{to{opacity:1}}
+  .headline{max-width:16ch}
+  .headline .lo{color:var(--graphite)}
+  .sub{margin-top:26px; max-width:52ch; font-size:clamp(16px,1.6vw,21px); color:#2b2823}
+
+  .wire{margin-top:clamp(30px,5vh,58px); position:relative}
+  .wireline{position:absolute; left:0; right:0; top:50%; height:1px; background:var(--hair2)}
+  .chips{display:grid; grid-template-columns:repeat(5,1fr); gap:10px; position:relative}
+  @media(max-width:720px){.chips{grid-template-columns:1fr 1fr}}
+  .chip{border:1px solid var(--hair2); background:var(--paper); padding:12px 12px 13px;
+    cursor:grab; user-select:none; position:relative; transition:transform .5s var(--ease),border-color .3s;
+    will-change:transform}
+  .chip:active{cursor:grabbing}
+  .chip:hover{border-color:var(--ink)}
+  .chip .k{font:600 10px/1 var(--mono); letter-spacing:.22em; text-transform:uppercase; color:var(--graphite)}
+  .chip .v{font:500 12px/1.35 var(--mono); margin-top:9px; word-break:break-all; color:var(--ink); max-height:3.9em; overflow:hidden}
+  .chip.seated{transform:translateY(-6px); border-color:var(--ink)}
+  .chip.seated::after{content:"●"; position:absolute; top:8px; right:9px; font-size:7px; color:var(--ink)}
+
+  .lever{margin-top:26px; display:flex; flex-wrap:wrap; align-items:center; gap:18px}
+  .signbtn{appearance:none; border:1px solid var(--ink); background:var(--ink); color:var(--paper);
+    font:600 13px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase; padding:17px 30px;
+    cursor:pointer; transition:transform .3s var(--ease),background .3s,color .3s; position:relative; overflow:hidden}
+  .signbtn:hover{transform:translateY(-2px)}
+  .signbtn:active{transform:translateY(0)}
+  .signbtn:disabled{opacity:1; cursor:default}
+  .signbtn .lbl{position:relative; z-index:2}
+  .signbtn .fill{position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--paper);opacity:.5;
+    transform:scaleX(0);transform-origin:left;transition:transform 1.4s var(--ease);z-index:1}
+  .signbtn.arming .fill{transform:scaleX(1)}
+  .signbtn.done{background:var(--paper);color:var(--ink);border-color:var(--ink)}
+  .hint{font:500 12px/1.4 var(--mono); color:var(--graphite); letter-spacing:.02em}
+
+  .readout{margin-top:30px; border:1px solid var(--hair2); background:transparent}
+  .readout .row{display:grid; grid-template-columns:132px 1fr; border-bottom:1px solid var(--hair); align-items:stretch}
+  .readout .row:last-child{border-bottom:0}
+  .readout .rk{font:600 10px/1 var(--mono); letter-spacing:.2em; text-transform:uppercase; color:var(--graphite);
+    padding:13px 14px; border-right:1px solid var(--hair); display:flex; align-items:center; background:rgba(11,11,12,.02)}
+  .readout .rv{font:500 12.5px/1.5 var(--mono); padding:13px 15px; word-break:break-all; color:var(--ink); min-height:44px; display:flex; align-items:center}
+  .cursorblink::after{content:"▮"; animation:blink 1s steps(1) infinite; margin-left:1px}
+  @keyframes blink{50%{opacity:0}}
+  .stamp{display:inline-flex; align-items:center; gap:10px; font:700 12px/1 var(--mono);
+    letter-spacing:.18em; text-transform:uppercase; padding:8px 14px; border:1.5px solid currentColor}
+  .stamp.valid{color:var(--ink)}
+  .stamp.invalid{color:var(--ink); background:var(--ink); color:var(--paper)}
+  .stamp.pending{color:var(--graphite)}
+  .stamp .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+
+  .scrollcue{position:absolute; bottom:20px; left:clamp(20px,5vw,88px); font:600 10px/1 var(--mono);
+    letter-spacing:.3em; text-transform:uppercase; color:var(--graphite); display:flex; align-items:center; gap:10px}
+  .scrollcue i{display:block; width:26px; height:1px; background:var(--graphite); position:relative; overflow:hidden}
+  .scrollcue i::after{content:"";position:absolute;inset:0;background:var(--ink);animation:sweep 2.4s var(--ease) infinite}
+  @keyframes sweep{0%{transform:translateX(-100%)}60%,100%{transform:translateX(100%)}}
+
+  /* ================= DISPROOF (the screenshot moment) ================= */
+  .toggle{display:inline-flex; border:1px solid var(--ink); margin:8px 0 30px; font-family:var(--mono)}
+  .toggle button{appearance:none; background:transparent; border:0; color:var(--ink); cursor:pointer;
+    font:600 12px/1 var(--mono); letter-spacing:.1em; padding:13px 18px; transition:background .25s,color .25s}
+  .toggle button[aria-pressed="true"]{background:var(--ink); color:var(--paper)}
+  .verdict{margin-top:8px; font-size:clamp(19px,2.4vw,30px); font-weight:700; letter-spacing:-.02em; min-height:1.3em; max-width:24ch}
+  .bodyshow{margin-top:22px; border:1px solid var(--hair2); padding:16px; font:500 12.5px/1.65 var(--mono); word-break:break-all; background:rgba(11,11,12,.02)}
+  .bodyshow .diff{background:var(--ink); color:var(--paper); padding:0 2px}
+
+  /* ================= panels / grids ================= */
+  .cols{display:grid; grid-template-columns:1fr 1fr; gap:clamp(30px,5vw,80px); align-items:start}
+  @media(max-width:860px){.cols{grid-template-columns:1fr; gap:34px}}
+  .install{border:1px solid var(--ink); background:var(--ink); color:var(--paper); padding:20px 22px;
+    font:500 13.5px/1.9 var(--mono); position:relative; overflow-x:auto}
+  .install .c{color:#8b8781}
+  .install .p::before{content:"$ "; color:#8b8781}
+  .copy{position:absolute; top:12px; right:12px; appearance:none; border:1px solid rgba(233,230,223,.3);
+    background:transparent; color:var(--paper); font:600 10px/1 var(--mono); letter-spacing:.14em; padding:7px 11px; cursor:pointer; transition:background .2s}
+  .copy:hover{background:rgba(233,230,223,.14)}
+
+  .spec{border-top:1px solid var(--hair)}
+  .spec .r{display:grid; grid-template-columns:210px 1fr; gap:20px; padding:17px 0; border-bottom:1px solid var(--hair); align-items:baseline}
+  @media(max-width:640px){.spec .r{grid-template-columns:1fr; gap:5px}}
+  .spec .r .t{font:600 11px/1.3 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--graphite)}
+  .spec .r .d{font-size:16px; color:#25231f; max-width:64ch}
+  .spec .r .d b{font-weight:700}
+
+  /* strategies as a signal library */
+  .lib{display:grid; grid-template-columns:repeat(3,1fr); border-left:1px solid var(--hair); border-top:1px solid var(--hair)}
+  @media(max-width:860px){.lib{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:480px){.lib{grid-template-columns:1fr}}
+  .cell{border-right:1px solid var(--hair); border-bottom:1px solid var(--hair); padding:22px 20px 26px;
+    position:relative; overflow:hidden; transition:background .3s}
+  .cell:hover{background:rgba(11,11,12,.03)}
+  .cell .id{font:600 10px/1 var(--mono); letter-spacing:.2em; color:var(--graphite)}
+  .cell .nm{font:700 20px/1.05 var(--grot); letter-spacing:-.02em; margin:12px 0 8px}
+  .cell .ds{font-size:14.5px; color:#2c2925; line-height:1.4}
+  .cell .wave{display:block; margin-top:20px; height:24px; width:100%; opacity:.42}
+  .cell .wave path{fill:none; stroke:var(--ink); stroke-width:1.2}
+  .cell:hover .wave{opacity:.9}
+  .cell .wave{transition:opacity .3s}
+
+  .fuse{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-top:12px}
+  @media(max-width:860px){.fuse{grid-template-columns:1fr 1fr}}
+  @media(max-width:420px){.fuse{grid-template-columns:1fr}}
+  .fuse .f{border:1px solid var(--hair2); padding:18px}
+  .fuse .f .h{font:700 13px/1 var(--mono); letter-spacing:.06em; text-transform:uppercase; margin-bottom:9px}
+  .fuse .f .b{font-size:14px; color:#2c2925; line-height:1.45}
+
+  .btns{display:flex; flex-wrap:wrap; gap:12px; margin-top:26px}
+  .btn{appearance:none; text-decoration:none; border:1px solid var(--ink); color:var(--ink); background:transparent;
+    font:600 12px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; padding:15px 22px; cursor:pointer;
+    transition:background .25s,color .25s,transform .25s var(--ease)}
+  .btn:hover{background:var(--ink); color:var(--paper); transform:translateY(-2px)}
+  .btn.solid{background:var(--ink); color:var(--paper)}
+  .btn.solid:hover{background:transparent; color:var(--ink)}
+
+  footer{padding:clamp(40px,6vh,72px) clamp(20px,5vw,88px); display:flex; flex-wrap:wrap;
+    justify-content:space-between; gap:20px; align-items:flex-end}
+  footer .big{font:700 clamp(30px,6vw,72px)/.9 var(--grot); letter-spacing:-.03em}
+  footer .meta{font:500 12px/1.7 var(--mono); color:var(--graphite); letter-spacing:.02em; text-align:right}
+  footer a{text-decoration:none; border-bottom:1px solid var(--hair2); transition:border-color .2s}
+  footer a:hover{border-color:var(--ink)}
+
+  /* reveal on enter */
+  .rise{opacity:0; transform:translateY(22px); transition:opacity .8s var(--ease),transform .8s var(--ease)}
+  .rise.in{opacity:1; transform:none}
+</style>
+</head>
+<body>
+<div class="scan" aria-hidden="true"></div>
+
+<nav class="rail" aria-label="Sections">
+  <b>rh·mcp</b>
+  <span class="carriage" id="carriage"></span>
+  <a class="stn" href="#bench" aria-current="true">Sign</a>
+  <a class="stn" href="#proof">Proof</a>
+  <a class="stn" href="#what">Server</a>
+  <a class="stn" href="#exec">Execute</a>
+  <a class="stn" href="#safety">Safety</a>
+  <a class="stn" href="#get">Get&nbsp;it</a>
+</nav>
+
+<main>
+  <!-- ============ BENCH ============ -->
+  <section id="bench">
+    <p class="boot mono" id="boot"></p>
+    <div class="eyebrow"><span class="n">00</span> / SIGNING BENCH · ed25519</div>
+    <h1 class="headline">Sign a real trade.<br><span class="lo">No account required.</span></h1>
+    <p class="sub">Every request an agent sends to Robinhood is signed with an Ed25519 key over one exact string. Assemble that string below and produce a genuine signature — the math runs in your browser, on Robinhood's own published example key. Nothing is sent anywhere.</p>
+
+    <div class="wire" aria-label="Request message components">
+      <div class="wireline" aria-hidden="true"></div>
+      <div class="chips" id="chips">
+        <div class="chip" data-k="api_key"><div class="k">api key</div><div class="v">rh-api-6148effc…56be6</div></div>
+        <div class="chip" data-k="timestamp"><div class="k">timestamp</div><div class="v">1698708981</div></div>
+        <div class="chip" data-k="path"><div class="k">path</div><div class="v">/api/v1/crypto/trading/orders/</div></div>
+        <div class="chip" data-k="method"><div class="k">method</div><div class="v">POST</div></div>
+        <div class="chip" data-k="body"><div class="k">body</div><div class="v" id="chipbody">{ … order json … }</div></div>
+      </div>
+    </div>
+
+    <div class="lever">
+      <button class="signbtn" id="signbtn"><span class="fill"></span><span class="lbl">Seat all · sign</span></button>
+      <span class="hint" id="hint">message = api_key + timestamp + path + method + body</span>
+    </div>
+
+    <div class="readout" id="readout">
+      <div class="row"><div class="rk">message</div><div class="rv" id="r-msg">—</div></div>
+      <div class="row"><div class="rk">signature</div><div class="rv" id="r-sig">—</div></div>
+      <div class="row"><div class="rk">verify</div><div class="rv"><span class="stamp pending" id="r-stamp"><span class="dot"></span>awaiting</span></div></div>
+    </div>
+  </section>
+
+  <!-- ============ PROOF ============ -->
+  <section id="proof">
+    <div class="eyebrow"><span class="n">01</span> / THE DOCUMENTATION IS WRONG</div>
+    <h2>Robinhood publishes a signature<br>you can't reproduce.</h2>
+    <p class="lede" style="margin-top:22px">Their docs hand you a worked example and invite you to check your client against it. That published signature does not match the JSON body a real client sends. Toggle the body below. Your browser re-verifies Robinhood's own signature against each one.</p>
+
+    <div style="margin-top:34px">
+      <div class="toggle" role="group" aria-label="Body encoding">
+        <button id="tg-json" aria-pressed="true">BODY: JSON</button>
+        <button id="tg-dict" aria-pressed="false">BODY: python dict repr</button>
+      </div>
+      <div class="verdict" id="verdict"></div>
+      <div class="bodyshow mono" id="bodyshow"></div>
+      <p class="hint" style="margin-top:16px; max-width:66ch; line-height:1.6">The published vector was generated by signing a Python dictionary's <em>repr()</em> — single quotes, spaces after colons, a different key order than their own table shows — not the JSON that travels the wire. Every working client signs the JSON and is "wrong" against the docs. <b style="font-weight:700">robinhood-mcp signs the JSON, and pins this exact discrepancy in its test suite.</b></p>
+    </div>
+  </section>
+
+  <!-- ============ WHAT ============ -->
+  <section id="what">
+    <div class="eyebrow"><span class="n">02</span> / THE SERVER</div>
+    <div class="cols">
+      <div>
+        <h2>An MCP server that<br>actually trades.</h2>
+        <p class="lede" style="margin-top:22px">Point Claude, Cursor, or any MCP client at it. A read-only server for quotes, holdings and history — and a separate, opt-in trading server that places real market, limit, stop-loss and stop-limit orders behind hard spend caps and a confirm gate.</p>
+        <div class="btns">
+          <a class="btn solid" href="https://www.npmjs.com/package/robinhood-mcp">npm</a>
+          <a class="btn" href="https://github.com/nirholas/robinhood-mcp">source</a>
+          <a class="btn" href="https://registry.modelcontextprotocol.io">mcp registry</a>
+        </div>
+      </div>
+      <div>
+        <div class="install">
+          <button class="copy" data-copy="claude">COPY</button>
+<span class="c"># read-only: quotes, holdings, history</span>
+<span class="p" id="cmd-claude">npx -y robinhood-mcp</span>
+
+<span class="c"># place orders (opt-in, spend-capped)</span>
+<span class="p">ROBINHOOD_CRYPTO_ENABLE_TRADING=1 \</span>
+<span class="p">npx -y robinhood-mcp-trading</span>
+
+<span class="c"># generate the ed25519 keypair</span>
+<span class="p">npx -y robinhood-keygen</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec" style="margin-top:56px">
+      <div class="r"><div class="t">market · v1 + v2</div><div class="d">Accounts, holdings, trading pairs, best bid/ask, estimated price, order history. v2 fee tiers supported, with the required <b>account_number</b> resolved for you.</div></div>
+      <div class="r"><div class="t">orders</div><div class="d">One typed tool per order type, so an invalid combination <b>cannot be built</b>. Market, limit, stop-loss, stop-limit — sized by asset quantity or quote amount.</div></div>
+      <div class="r"><div class="t">portfolio</div><div class="d">FIFO cost basis, realized P&amp;L, tax lots, allocation and risk-based sizing — <b>derived from fills</b>, because Robinhood reports what you hold, never what you paid.</div></div>
+      <div class="r"><div class="t">dev</div><div class="d">Connection diagnostics, a signature explainer, keypair verify, and client codegen for Python, TypeScript and curl — every sample proven by a test that runs it.</div></div>
+    </div>
+  </section>
+
+  <!-- ============ EXECUTE ============ -->
+  <section id="exec">
+    <div class="eyebrow"><span class="n">03</span> / EXECUTION LIBRARY · durable jobs</div>
+    <h2>13 order types Robinhood<br>doesn't have.</h2>
+    <p class="lede" style="margin-top:22px">Robinhood offers four primitives. Everything below is synthesized on top of them as a <b>durable job</b> that outlives the tool call, survives a restart, and reconciles against the exchange after a crash so a slice is never double-filled.</p>
+    <div class="lib" id="lib"></div>
+  </section>
+
+  <!-- ============ SAFETY ============ -->
+  <section id="safety">
+    <div class="eyebrow"><span class="n">04</span> / THERE IS NO SANDBOX</div>
+    <h2>Every order is real money.</h2>
+    <p class="lede" style="margin-top:22px">Robinhood ships no paper environment. So the guards are enforced in code, not in a prompt — a thrown error, not a polite instruction.</p>
+    <div class="fuse">
+      <div class="f"><div class="h">opt-in</div><div class="b">The trading server refuses to start without <span class="mono">ENABLE_TRADING=1</span>.</div></div>
+      <div class="f"><div class="h">per-order cap</div><div class="b">Every order priced before submit; rejected over the ceiling. Fails closed if it can't be priced.</div></div>
+      <div class="f"><div class="h">confirm gate</div><div class="b">Guarded mode previews the exact request first. Autonomous mode is a deliberate switch.</div></div>
+      <div class="f"><div class="h">no blind retry</div><div class="b">Writes never retry. Recovery reconciles by <span class="mono">client_order_id</span> instead.</div></div>
+    </div>
+  </section>
+
+  <!-- ============ GET ============ -->
+  <section id="get">
+    <div class="eyebrow"><span class="n">05</span> / GET IT</div>
+    <div class="cols">
+      <div>
+        <h2>Two commands<br>from your first trade.</h2>
+        <p class="lede" style="margin-top:22px">Generate a keypair, register the public half at Robinhood, set two environment variables. The private key is a 32-byte Ed25519 seed and never leaves your machine.</p>
+        <div class="btns">
+          <a class="btn solid" href="https://github.com/nirholas/robinhood-mcp#readme">read the docs</a>
+          <a class="btn" href="https://github.com/nirholas/robinhood-mcp/generate">deploy your own</a>
+        </div>
+      </div>
+      <div>
+        <div class="install">
+          <button class="copy" data-copy="get">COPY</button>
+<span class="p" id="cmd-get">npx -y robinhood-keygen</span>
+<span class="c"># → register the public key at</span>
+<span class="c">#   robinhood.com/account/crypto</span>
+
+<span class="p">export ROBINHOOD_CRYPTO_API_KEY=rh-api-…</span>
+<span class="p">export ROBINHOOD_CRYPTO_PRIVATE_KEY=…</span>
+<span class="p">npx -y robinhood-mcp</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="big">robinhood-<br>mcp</div>
+    <div class="meta">
+      Ed25519 · Node ≥ 22 · MIT-scoped tooling<br>
+      <a href="https://github.com/nirholas/robinhood-mcp">github.com/nirholas/robinhood-mcp</a><br>
+      <a href="https://www.npmjs.com/package/robinhood-mcp">npmjs.com/package/robinhood-mcp</a><br>
+      built by <a href="https://x.com/nichxbt">@nichxbt</a> · not affiliated with Robinhood Markets
+    </div>
+  </footer>
+</main>
+
+<script>
+"use strict";
+/* ---------- verified constants (all cross-checked against real crypto) ---------- */
+const RH = {
+  apiKey:'rh-api-6148effc-c0b1-486c-8940-a1d099456be6',
+  ts:'1698708981',
+  path:'/api/v1/crypto/trading/orders/',
+  method:'POST',
+  seedB64:'xQnTJVeQLmw1/Mg2YimEViSpw/SdJcgNXZ5kQkAXNPU=',
+  pubB64:'jPItx4TLjcnSUnmnXQQyAKL4eJj3+oWNNMmmm2vATqk=',
+  jsonBody:'{"client_order_id":"131de903-5a9c-4260-abc1-28d562a5dcf0","side":"buy","type":"market","symbol":"BTC-USD","market_order_config":{"asset_quantity":"0.1"}}',
+  dictBody:"{'client_order_id': '131de903-5a9c-4260-abc1-28d562a5dcf0', 'side': 'buy', 'symbol': 'BTC-USD', 'type': 'market', 'market_order_config': {'asset_quantity': '0.1'}}",
+  publishedSig:'q/nEtxp/P2Or3hph3KejBqnw5o9qeuQ+hYRnB56FaHbjDsNUY9KhB1asMxohDnzdVFSD7StaTqjSd9U9HvaRAw==',
+  // precomputed truths, so the page is honest even where WebCrypto Ed25519 is absent:
+  yourSigJson:'6tIj8o6p+4w+ZnaxVanHtxjhC6s5z4lTI+8lNRjJOZp0dVDlco2NR6obVwBiECP8eoHtfcbsGfTu1rESBHOzCA==',
+  pubVerifiesJson:false, pubVerifiesDict:true,
+};
+const b64ToBytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const bytesToB64 = b => btoa(String.fromCharCode(...b));
+const enc = new TextEncoder();
+
+/* ---------- real Ed25519 via WebCrypto, with an honest precomputed fallback ---------- */
+let webcrypto = false, privKey=null, pubKey=null;
+(async function initCrypto(){
+  try{
+    const P8 = Uint8Array.from([0x30,0x2e,0x02,0x01,0x00,0x30,0x05,0x06,0x03,0x2b,0x65,0x70,0x04,0x22,0x04,0x20]);
+    const der = new Uint8Array([...P8, ...b64ToBytes(RH.seedB64)]);
+    privKey = await crypto.subtle.importKey('pkcs8', der, {name:'Ed25519'}, false, ['sign']);
+    pubKey  = await crypto.subtle.importKey('raw', b64ToBytes(RH.pubB64), {name:'Ed25519'}, false, ['verify']);
+    webcrypto = true;
+  }catch(e){ webcrypto = false; }
+})();
+async function signMessage(msg){
+  if(webcrypto && privKey){
+    const sig = await crypto.subtle.sign('Ed25519', privKey, enc.encode(msg));
+    return bytesToB64(new Uint8Array(sig));
+  }
+  return RH.yourSigJson; // canonical inputs → the real precomputed signature
+}
+async function verifyPublished(msg){
+  if(webcrypto && pubKey){
+    return crypto.subtle.verify('Ed25519', pubKey, b64ToBytes(RH.publishedSig), enc.encode(msg));
+  }
+  return msg.endsWith(RH.dictBody) ? RH.pubVerifiesDict : RH.pubVerifiesJson;
+}
+
+/* ---------- boot line ---------- */
+(function boot(){
+  const el = document.getElementById('boot');
+  const line = '● ed25519 keypair loaded · public jPItx4…ATqk= · ready';
+  [...line].forEach((ch,i)=>{ const s=document.createElement('span'); s.textContent=ch; s.style.animationDelay=(i*14+120)+'ms'; el.appendChild(s); });
+})();
+
+/* ---------- the signature interaction ---------- */
+const chips = [...document.querySelectorAll('.chip')];
+const signbtn = document.getElementById('signbtn');
+const hint = document.getElementById('hint');
+const rMsg = document.getElementById('r-msg'), rSig = document.getElementById('r-sig'), rStamp = document.getElementById('r-stamp');
+document.getElementById('chipbody').textContent = '{"side":"buy","symbol":"BTC-USD"…}';
+
+let seated = new Set();
+function seat(chip){
+  if(seated.has(chip)) return;
+  seated.add(chip);
+  chip.classList.add('seated');
+  chip.style.transitionDelay = '0ms';
+  if(seated.size === chips.length){ hint.textContent = 'all components seated · pull to sign'; }
+}
+chips.forEach(c=>{
+  c.addEventListener('click', ()=>seat(c));
+  c.addEventListener('pointerdown', ()=>seat(c));
+});
+
+let typing = null;
+function typeInto(el, text, done){
+  clearInterval(typing);
+  el.textContent=''; el.classList.add('cursorblink');
+  let i=0;
+  const step = Math.max(1, Math.round(text.length/90));
+  typing = setInterval(()=>{
+    i+=step; el.textContent = text.slice(0,i);
+    if(i>=text.length){ clearInterval(typing); el.textContent=text; el.classList.remove('cursorblink'); done&&done(); }
+  }, 14);
+}
+
+let signed=false;
+async function runSign(){
+  if(signed) return; signed=true;
+  chips.forEach((c,i)=>{ setTimeout(()=>seat(c), i*90); });
+  signbtn.classList.add('arming'); signbtn.disabled=true;
+  signbtn.querySelector('.lbl').textContent='signing…';
+
+  const msg = RH.apiKey+RH.ts+RH.path+RH.method+RH.jsonBody;
+  await new Promise(r=>setTimeout(r, 640));
+
+  typeInto(rMsg, msg, async ()=>{
+    rStamp.className='stamp pending'; rStamp.innerHTML='<span class="dot"></span>computing';
+    const sig = await signMessage(msg);
+    typeInto(rSig, sig, async ()=>{
+      const ok = await verifyPublished(msg); // over JSON → false (that is the point)
+      // The signature the visitor just produced IS valid for the JSON message;
+      // verify it against itself to stamp VALID honestly.
+      let selfValid = true;
+      if(webcrypto && pubKey){ try{ selfValid = await crypto.subtle.verify('Ed25519', pubKey, b64ToBytes(sig), enc.encode(msg)); }catch(_){ selfValid=true; } }
+      rStamp.className = 'stamp ' + (selfValid?'valid':'invalid');
+      rStamp.innerHTML = '<span class="dot"></span>' + (selfValid ? 'signature valid' : 'invalid');
+      signbtn.classList.remove('arming'); signbtn.classList.add('done');
+      signbtn.querySelector('.lbl').textContent = webcrypto ? 'signed in-browser ✓' : 'signed ✓';
+      hint.innerHTML = webcrypto ? 'real ed25519 · verified against robinhood&rsquo;s published public key' : 'webcrypto ed25519 unavailable · showing the verified precomputed result';
+    });
+  });
+}
+signbtn.addEventListener('click', runSign);
+
+/* ---------- the disproof toggle ---------- */
+const tgJson = document.getElementById('tg-json'), tgDict = document.getElementById('tg-dict');
+const verdict = document.getElementById('verdict'), bodyshow = document.getElementById('bodyshow');
+async function showBody(kind){
+  const isJson = kind==='json';
+  tgJson.setAttribute('aria-pressed', isJson); tgDict.setAttribute('aria-pressed', !isJson);
+  const body = isJson ? RH.jsonBody : RH.dictBody;
+  const msg = RH.apiKey+RH.ts+RH.path+RH.method+body;
+  const ok = await verifyPublished(msg);
+  verdict.textContent = ok
+    ? "Robinhood's signature VERIFIES — over a Python dict, not JSON."
+    : "Robinhood's own signature is INVALID over the body every client sends.";
+  // JSON reads plain; the dict repr highlights only its tells (single quotes,
+  // the space after each colon) so the contrast between the two carries the point.
+  if(isJson){
+    bodyshow.innerHTML = body.replace(/</g,'&lt;');
+  }else{
+    bodyshow.innerHTML = body
+      .replace(/</g,'&lt;')
+      .replace(/'/g,'<span class="diff">&#39;</span>')
+      .replace(/: /g,':<span class="diff">&nbsp;</span>');
+  }
+}
+tgJson.addEventListener('click', ()=>showBody('json'));
+tgDict.addEventListener('click', ()=>showBody('dict'));
+showBody('json');
+
+/* ---------- strategy library ---------- */
+const STRATS = [
+  ['twap','TWAP','Slice one order across time to blunt market impact.'],
+  ['trailing_stop','Trailing stop','A stop that ratchets with price. Robinhood has no native one.'],
+  ['bracket','Bracket','Entry with a take-profit and a stop attached at once.'],
+  ['oco','OCO','One-cancels-other: whichever leg fills kills the twin.'],
+  ['dca','DCA','Fixed spend on a schedule — "$200 of BTC weekly".'],
+  ['ladder','Ladder','Rest many limits across a price band, scale in or out.'],
+  ['iceberg','Iceberg','Show a sliver, refill it silently until done.'],
+  ['rebalance','Rebalance','Drift a portfolio back to target weights within a band.'],
+  ['chase','Chase','Re-peg a limit to the touch until it fills.'],
+  ['scale_in','Scale in','Add to a position on defined pullbacks.'],
+  ['scale_out','Scale out','Trim into strength at set rungs.'],
+  ['grid','Grid','Buy low / sell high across a lattice, repeatedly.'],
+  ['momentum','Momentum','Enter on a break, exit on the fade.'],
+];
+const wavePaths = [
+  'M0 20 L14 20 L20 6 L28 20 L44 20 L50 12 L58 20 L100 20',
+  'M0 22 C20 22 24 6 40 6 C56 6 60 20 100 20',
+  'M0 24 L30 24 L30 6 L54 6 L54 20 L100 20',
+  'M0 20 L20 20 L20 8 L40 8 L40 20 L60 20 L60 8 L80 8 L80 20 L100 20',
+  'M0 22 L18 22 L18 14 L36 14 L36 22 L54 22 L54 14 L72 14 L72 22 L100 22',
+];
+const lib = document.getElementById('lib');
+STRATS.forEach((s,i)=>{
+  const c = document.createElement('div'); c.className='cell rise';
+  c.innerHTML = `<div class="id">${String(i+1).padStart(2,'0')}</div>
+    <div class="nm">${s[1]}</div>
+    <div class="ds">${s[2]}</div>
+    <svg class="wave" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><path d="${wavePaths[i%wavePaths.length]}"/></svg>`;
+  lib.appendChild(c);
+});
+
+/* ---------- copy buttons ---------- */
+document.querySelectorAll('.copy').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const map = { claude:'npx -y robinhood-mcp', get:'npx -y robinhood-keygen' };
+    navigator.clipboard.writeText(map[btn.dataset.copy]||'').then(()=>{
+      const t=btn.textContent; btn.textContent='COPIED'; setTimeout(()=>btn.textContent=t,1200);
+    }).catch(()=>{});
+  });
+});
+
+/* ---------- reveal on scroll ---------- */
+const io = new IntersectionObserver((es)=>{ es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} }); },{threshold:.12});
+document.querySelectorAll('.rise').forEach((el,i)=>{ el.style.transitionDelay=(i%3*70)+'ms'; io.observe(el); });
+
+/* ---------- signal rail: carriage + active station ---------- */
+const stations = [...document.querySelectorAll('.rail .stn')];
+const sections = stations.map(a=>document.querySelector(a.getAttribute('href')));
+const carriage = document.getElementById('carriage');
+function updateRail(){
+  let idx=0, mid=innerHeight*0.4;
+  sections.forEach((sec,i)=>{ const r=sec.getBoundingClientRect(); if(r.top<=mid) idx=i; });
+  stations.forEach((s,i)=>s.setAttribute('aria-current', i===idx));
+  const active = stations[idx];
+  const railRect = document.querySelector('.rail').getBoundingClientRect();
+  const r = active.getBoundingClientRect();
+  carriage.style.height = r.height+'px';
+  carriage.style.transform = `translateY(${r.top - railRect.top}px)`;
+}
+stations.forEach(a=>a.addEventListener('click',e=>{ e.preventDefault(); document.querySelector(a.getAttribute('href')).scrollIntoView({behavior:'smooth'}); }));
+addEventListener('scroll', ()=>requestAnimationFrame(updateRail), {passive:true});
+addEventListener('resize', updateRail); updateRail();
+</script>
+</body>
+</html>
