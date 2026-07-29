@@ -1,5 +1,12 @@
 node_modules/
 dist/
 *.log
+
+# Environment. ROBINHOOD_CRYPTO_PRIVATE_KEY lives in these files and authorizes
+# real trades, so every .env variant is ignored except the checked-in template.
 .env
-.env.local
+.env.*
+!.env.example
+
+coverage/
+.DS_Store
