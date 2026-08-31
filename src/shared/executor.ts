@@ -414,14 +414,22 @@ export function buildOrderBody(request: OrderRequest): Record<string, unknown> {
  * Round a quantity down to a trading pair's increment.
  *
  * Rounds DOWN so a computed size never exceeds what the caller intended, and
- * uses string math to avoid float drift on small-increment assets.
+ * formats to the increment's own precision so small-increment assets do not
+ * carry float drift into the wire body.
  */
 export function roundToIncrement(quantity: number, increment: string | number | undefined): string {
   const inc = Number(increment);
   if (!Number.isFinite(inc) || inc <= 0) return String(quantity);
 
   const decimals = decimalPlaces(inc);
-  const steps = Math.floor(quantity / inc);
+  // Count whole increments with a tolerance for binary representation error.
+  // A bare floor lands one increment low on values that are exact multiples,
+  // because the division undershoots: 0.3 / 0.1 is 2.9999999999999996, which
+  // floors to 2 and sizes 0.2. The tolerance scales with the ratio, so it
+  // absorbs that error without promoting a quantity genuinely short of the
+  // next step (0.29 / 0.1 still floors to 2).
+  const ratio = quantity / inc;
+  const steps = Math.floor(ratio + Math.abs(ratio) * 8 * Number.EPSILON + Number.EPSILON);
   return (steps * inc).toFixed(decimals);
 }
 
