@@ -256,4 +256,43 @@ describe('roundToIncrement', () => {
     expect(roundToIncrement(1.5, undefined)).toBe('1.5');
     expect(roundToIncrement(1.5, '0')).toBe('1.5');
   });
+
+  it('leaves an exact multiple of the increment alone', () => {
+    // These divide to just under a whole number in binary floating point, so a
+    // bare floor drops a full increment: 0.3 / 0.1 is 2.9999999999999996.
+    expect(roundToIncrement(0.3, '0.1')).toBe('0.3');
+    expect(roundToIncrement(0.7, '0.1')).toBe('0.7');
+    expect(roundToIncrement(8.1, '0.1')).toBe('8.1');
+    expect(roundToIncrement(0.29, '0.01')).toBe('0.29');
+    expect(roundToIncrement(0.57, '0.01')).toBe('0.57');
+    expect(roundToIncrement(1.005, '0.001')).toBe('1.005');
+    expect(roundToIncrement(0.0003, '0.0001')).toBe('0.0003');
+    expect(roundToIncrement(2.4, '0.2')).toBe('2.4');
+    expect(roundToIncrement(0.35, '0.05')).toBe('0.35');
+  });
+
+  it('still rounds down a quantity that is genuinely short of the next step', () => {
+    // The tolerance absorbs representation error only; it must not promote a
+    // size the caller did not ask for.
+    expect(roundToIncrement(0.29999, '0.1')).toBe('0.2');
+    expect(roundToIncrement(0.37, '0.05')).toBe('0.35');
+    expect(roundToIncrement(2.39, '0.2')).toBe('2.2');
+    expect(roundToIncrement(0.00029, '0.0001')).toBe('0.0002');
+  });
+
+  it('never returns more than the caller asked for, at any increment', () => {
+    const increments = ['0.00000001', '0.0001', '0.001', '0.01', '0.05', '0.1', '0.2', '1'];
+    for (const increment of increments) {
+      const inc = Number(increment);
+      for (let step = 1; step <= 40; step++) {
+        for (const offset of [0, inc / 3, inc * 0.99]) {
+          const quantity = step * inc + offset;
+          const rounded = Number(roundToIncrement(quantity, increment));
+          // Never oversized, and always a whole number of increments.
+          expect(rounded).toBeLessThanOrEqual(quantity + Number.EPSILON * quantity * 8);
+          expect(Math.abs(rounded / inc - Math.round(rounded / inc))).toBeLessThan(1e-6);
+        }
+      }
+    }
+  });
 });
