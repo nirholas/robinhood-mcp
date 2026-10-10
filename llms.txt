@@ -1,0 +1,28 @@
+# robinhood-mcp
+
+> Model Context Protocol servers for the official Robinhood Crypto Trading API: the credentialed brokerage API at trading.robinhood.com, documented at docs.robinhood.com/crypto/trading.
+
+robinhood-mcp is an open-source repository by nirholas, part of the three.ws ecosystem.
+
+## Docs
+
+- [README](https://github.com/nirholas/robinhood-mcp/blob/HEAD/README.md): install, usage and reference
+- [The signing bench: nirholas.github.io/robinhood-mcp(https://nirholas.github.io/robinhood-mcp/)](https://github.com/nirholas/robinhood-mcp/blob/HEAD/README.md#the-signing-bench-nirholasgithubiorobinhood-mcphttpsnirholasgithubiorobinhood-mcp)
+- [Safety](https://github.com/nirholas/robinhood-mcp/blob/HEAD/README.md#safety)
+- [Install](https://github.com/nirholas/robinhood-mcp/blob/HEAD/README.md#install)
+- [Modules](https://github.com/nirholas/robinhood-mcp/blob/HEAD/README.md#modules)
+- [The thirteen synthetic order types](https://github.com/nirholas/robinhood-mcp/blob/HEAD/README.md#the-thirteen-synthetic-order-types)
+- [Durable jobs](https://github.com/nirholas/robinhood-mcp/blob/HEAD/README.md#durable-jobs)
+- [Configuration](https://github.com/nirholas/robinhood-mcp/blob/HEAD/README.md#configuration)
+- [Examples](https://github.com/nirholas/robinhood-mcp/blob/HEAD/README.md#examples)
+- [AGENTS.md](https://github.com/nirholas/robinhood-mcp/blob/HEAD/AGENTS.md): guidance for coding agents
+- [Full text for LLMs](https://github.com/nirholas/robinhood-mcp/blob/HEAD/llms-full.txt): the README inlined
+
+## Project
+
+- [Source](https://github.com/nirholas/robinhood-mcp)
+- [Issues](https://github.com/nirholas/robinhood-mcp/issues)
+- [Discussions](https://github.com/nirholas/robinhood-mcp/discussions)
+- [Homepage](https://github.com/nirholas/robinhood-mcp)
+- [three.ws](https://three.ws): the platform this is part of
+- [All repositories by nirholas](https://github.com/nirholas/nirholas#readme)

@@ -1,5 +1,10 @@
 # robinhood-mcp
 
+<!-- three.ws:badges -->
+[![GitHub stars](https://img.shields.io/github/stars/nirholas/robinhood-mcp?style=flat&logo=github)](https://github.com/nirholas/robinhood-mcp/stargazers) [![License](https://img.shields.io/github/license/nirholas/robinhood-mcp?style=flat)](https://github.com/nirholas/robinhood-mcp/blob/HEAD/LICENSE) [![Last commit](https://img.shields.io/github/last-commit/nirholas/robinhood-mcp?style=flat)](https://github.com/nirholas/robinhood-mcp/commits) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat)](https://github.com/nirholas/robinhood-mcp/pulls) [![AI agent friendly](https://img.shields.io/badge/AI%20agents-AGENTS.md%20%2B%20llms.txt-6d5dfc?style=flat)](https://github.com/nirholas/robinhood-mcp/blob/HEAD/AGENTS.md)
+<!-- /three.ws:badges -->
+
+
 An execution toolkit for the **official Robinhood Crypto Trading API**, delivered over the Model Context Protocol.
 
 Robinhood's crypto API exposes four order types and nothing else: `market`, `limit`, `stop_loss`, and `stop_limit`. There is no bracket, no OCO, no trailing stop, no TWAP, no iceberg, no scale-in ladder, no scheduled DCA, no portfolio rebalance. Those are the order types people actually want, and every one of them has the same requirement: something has to keep working after the request returns. A trailing stop that exists only for the duration of one tool call is not a trailing stop. This package synthesizes the thirteen order types Robinhood lacks and runs them as **durable background jobs** that survive the agent disconnecting, the server restarting, and the machine rebooting. Around that sit ~73 tools across 8 opt-in modules: quotes and holdings, FIFO cost basis and realized P&L, a trade journal, risk limits with an enforced kill switch, and integration diagnostics.
@@ -395,3 +400,26 @@ Apache-2.0. See [LICENSE](LICENSE).
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=nirholas/robinhood-mcp&type=Date)](https://www.star-history.com/#nirholas/robinhood-mcp&Date)
+
+<!-- three.ws:growth -->
+## Support the project
+
+If robinhood-mcp saves you time, **[star it on GitHub](https://github.com/nirholas/robinhood-mcp)**. Stars are how other developers and AI agents find the repositories worth trusting, and they cost you one click.
+
+Know someone who would use it? [Post on X](https://twitter.com/intent/tweet?text=robinhood-mcp%3A%20Model%20Context%20Protocol%20servers%20for%20the%20official%20Robinhood%20Crypto%20Trading%20API%3A%20the%20credentialed&url=https%3A%2F%2Fgithub.com%2Fnirholas%2Frobinhood-mcp) · [Share on Bluesky](https://bsky.app/intent/compose?text=robinhood-mcp%3A%20Model%20Context%20Protocol%20servers%20for%20the%20official%20Robinhood%20Crypto%20Trading%20API%3A%20the%20credentialed%20https%3A%2F%2Fgithub.com%2Fnirholas%2Frobinhood-mcp) · [Share on LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fgithub.com%2Fnirholas%2Frobinhood-mcp) · [Submit to Hacker News](https://news.ycombinator.com/submitlink?u=https%3A%2F%2Fgithub.com%2Fnirholas%2Frobinhood-mcp&t=robinhood-mcp%3A%20Model%20Context%20Protocol%20servers%20for%20the%20official%20Robinhood%20Crypto%20Trading%20API%3A%20the%20credentialed) · [Share on Reddit](https://www.reddit.com/submit?url=https%3A%2F%2Fgithub.com%2Fnirholas%2Frobinhood-mcp&title=robinhood-mcp%3A%20Model%20Context%20Protocol%20servers%20for%20the%20official%20Robinhood%20Crypto%20Trading%20API%3A%20the%20credentialed)
+
+## Built for AI agents too
+
+Coding agents and LLM tooling can read this repo directly: [AGENTS.md](./AGENTS.md), [llms.txt](./llms.txt), [llms-full.txt](./llms-full.txt). Point an agent at `https://github.com/nirholas/robinhood-mcp` and it has the context it needs.
+
+## More from the same author
+
+- [All repositories by nirholas](https://github.com/nirholas/nirholas#readme): the full catalog, grouped by topic
+- [three.ws](https://three.ws): the platform for 3D AI agents with Solana wallets, a skill marketplace and x402 payments
+- Questions or ideas: [open an issue](https://github.com/nirholas/robinhood-mcp/issues) or [start a discussion](https://github.com/nirholas/robinhood-mcp/discussions)
+
+## Contributors
+
+[![Contributors](https://contrib.rocks/image?repo=nirholas/robinhood-mcp)](https://github.com/nirholas/robinhood-mcp/graphs/contributors)
+
+<!-- /three.ws:growth -->
