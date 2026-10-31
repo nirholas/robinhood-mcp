@@ -59,7 +59,7 @@ export function registerAlgoTools(
       inputSchema: {
         strategy: z.string().min(1).describe('Strategy name, e.g. "twap".'),
         params: z
-          .record(z.unknown())
+          .record(z.string(), z.unknown())
           .describe('Strategy parameters. See algo_list_strategies for what each one requires.'),
       },
     },

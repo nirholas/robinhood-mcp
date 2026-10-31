@@ -496,7 +496,7 @@ export function registerAlgoStartTools(server: McpServer, deps: AlgoStartDeps): 
         'user the legs, then run it for real.',
       inputSchema: {
         targets: z
-          .record(z.number().min(0).max(1))
+          .record(z.string(), z.number().min(0).max(1))
           .describe(
             'Trading pair to target weight as a fraction of 1, e.g. {"BTC-USD": 0.6, "ETH-USD": 0.4}. Weights must sum to 1.0.',
           ),
