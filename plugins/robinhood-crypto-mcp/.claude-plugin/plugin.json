@@ -1,0 +1,18 @@
+{
+  "name": "robinhood-crypto-mcp",
+  "version": "0.1.1",
+  "description": "Read-only Robinhood Crypto Trading API tools for Claude Code: account, holdings, quotes, orders, cost basis and P&L.",
+  "author": {
+    "name": "nirholas"
+  },
+  "repository": "https://github.com/nirholas/robinhood-mcp",
+  "homepage": "https://github.com/nirholas/robinhood-mcp",
+  "license": "Apache-2.0",
+  "keywords": [
+    "mcp",
+    "robinhood-crypto",
+    "trading",
+    "portfolio",
+    "read-only"
+  ]
+}
