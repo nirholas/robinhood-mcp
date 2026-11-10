@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "robinhood-crypto": {
+      "command": "npx",
+      "args": ["-y", "robinhood-mcp"],
+      "env": {
+        "ROBINHOOD_CRYPTO_API_KEY": "${ROBINHOOD_CRYPTO_API_KEY:-}",
+        "ROBINHOOD_CRYPTO_API_VERSION": "${ROBINHOOD_CRYPTO_API_VERSION:-}"
+      }
+    }
+  }
+}
